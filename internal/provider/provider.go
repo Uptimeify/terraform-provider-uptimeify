@@ -69,11 +69,18 @@ func (p *uptimeifyProvider) Configure(ctx context.Context, req provider.Configur
 }
 
 func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewTagResource}
+	return []func() resource.Resource{
+		NewTagResource,
+		NewWebsiteResource,
+	}
 }
 
 func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewTagDataSource}
+	return []func() datasource.DataSource{
+		NewTagDataSource,
+		NewWebsiteDataSource,
+		NewCustomerDataSource,
+	}
 }
 
 func firstNonEmpty(v ...string) string {

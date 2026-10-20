@@ -59,11 +59,7 @@ func TestAccTag(t *testing.T) {
 	var tagID string
 
 	tfresource.Test(t, tfresource.TestCase{
-		PreCheck: func() {
-			if os.Getenv("UPTIMEIFY_API_TOKEN") == "" {
-				t.Fatal("UPTIMEIFY_API_TOKEN must be set for acceptance tests")
-			}
-		},
+		PreCheck:                 func() { accPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
 			if _, err := accClient().GetTag(context.Background(), tagID); !client.IsNotFound(err) {
@@ -129,8 +125,17 @@ data "uptimeify_tag" "by_id"   { id = uptimeify_tag.t.id }
 	})
 }
 
+// accPreCheck stops an acceptance run that would fall back to the production endpoint.
+func accPreCheck(t *testing.T) {
+	t.Helper()
+	if os.Getenv("UPTIMEIFY_ENDPOINT") == "" || os.Getenv("UPTIMEIFY_API_TOKEN") == "" {
+		t.Fatal("UPTIMEIFY_ENDPOINT and UPTIMEIFY_API_TOKEN must be set for acceptance tests (no default endpoint in tests)")
+	}
+}
+
+// accClient never falls back to DefaultEndpoint: without UPTIMEIFY_ENDPOINT every call fails locally.
 func accClient() *client.Client {
-	return client.New(firstNonEmpty(os.Getenv("UPTIMEIFY_ENDPOINT"), DefaultEndpoint), os.Getenv("UPTIMEIFY_API_TOKEN"), "test")
+	return client.New(os.Getenv("UPTIMEIFY_ENDPOINT"), os.Getenv("UPTIMEIFY_API_TOKEN"), "test")
 }
 
 func tagConfig(name, color string) string {
