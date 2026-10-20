@@ -1,0 +1,1 @@
+terraform import uptimeify_notification_channel.ops_mail 42
