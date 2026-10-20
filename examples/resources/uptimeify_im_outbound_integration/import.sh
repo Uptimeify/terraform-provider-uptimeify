@@ -1,0 +1,1 @@
+terraform import uptimeify_im_outbound_integration.jira 21
