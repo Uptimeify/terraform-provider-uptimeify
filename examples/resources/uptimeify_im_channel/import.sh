@@ -1,0 +1,1 @@
+terraform import uptimeify_im_channel.ops_slack 12
