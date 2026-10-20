@@ -47,6 +47,7 @@ docker run --rm \
   -w /src \
   -e UPTIMEIFY_ENDPOINT="$UPTIMEIFY_ENDPOINT" \
   -e UPTIMEIFY_API_TOKEN \
+  $(env | grep -o '^UPTIMEIFY_ACC_[A-Z_]*' | sed 's/^/-e /') \
   -e TOFU_VERSION="$TOFU_VERSION" \
   -e TOFU_SHA256_amd64="$TOFU_SHA256_amd64" \
   -e TOFU_SHA256_arm64="$TOFU_SHA256_arm64" \
