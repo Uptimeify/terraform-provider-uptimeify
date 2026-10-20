@@ -81,6 +81,12 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewFTPMonitorResource,
 		NewIMAPPopMonitorResource,
 		NewWebsiteResource,
+		NewIMTeamResource,
+		NewIMTeamMemberResource,
+		NewIMEscalationTierResource,
+		NewIMScheduleResource,
+		NewIMScheduleOverrideResource,
+		NewIMTeamOverrideResource,
 	}
 }
 
@@ -98,6 +104,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewFTPMonitorDataSource,
 		NewIMAPPopMonitorDataSource,
 		NewWebsiteDataSource,
+		NewIMTeamDataSource,
+		NewUserDataSource,
 	}
 }
 
