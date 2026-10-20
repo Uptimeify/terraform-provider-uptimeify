@@ -1,0 +1,6 @@
+/terraform-provider-uptimeify
+/dist/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
