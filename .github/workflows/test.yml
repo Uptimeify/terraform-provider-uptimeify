@@ -6,29 +6,32 @@ on:
 permissions:
   contents: read
 jobs:
+  # Runs on Forgejo (origin) and on the GitHub mirror alike. Forgejo resolves `uses:` against its
+  # own action mirror, which carries actions/checkout but not actions/setup-go; Go therefore comes
+  # from the official archive with a pinned checksum instead of an action.
   test:
     runs-on: ubuntu-24.04
+    env:
+      GO_VERSION: 1.25.14
+      GO_SHA256_amd64: a21ae5633a269bcd7e90cf767e48225633795e99d831742cbf3397064fee7712
+      GO_SHA256_arm64: 9bf234ea70ffec9347fdf6b22ce4add51717d3386a38a441e8c8743fceb5eaee
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            x86_64) a=amd64 ;;
+            aarch64) a=arm64 ;;
+            *) echo "::error::no Go build for $(uname -m)"; exit 1 ;;
+          esac
+          eval "sum=\$GO_SHA256_$a"
+          curl -sfL "https://go.dev/dl/go${GO_VERSION}.linux-${a}.tar.gz" -o /tmp/go.tgz
+          echo "${sum}  /tmp/go.tgz" | sha256sum -c -
+          rm -rf "$HOME/go-sdk" && mkdir -p "$HOME/go-sdk" && tar -C "$HOME/go-sdk" -xzf /tmp/go.tgz
+          echo "$HOME/go-sdk/go/bin" >> "$GITHUB_PATH"
       - run: go mod tidy -diff
       - run: go vet ./...
       - run: go build ./...
       - run: go test ./...
       - name: docs are up to date
         run: go generate ./... && git diff --exit-code -- docs/
-  lint:
-    runs-on: ubuntu-24.04
-    continue-on-error: true # optional until the first lint baseline exists
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.14.0

@@ -7,6 +7,8 @@ permissions:
   contents: write
 jobs:
   goreleaser:
+    # Registry releases come from the public GitHub mirror only, never from Forgejo.
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
