@@ -90,6 +90,13 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewImAlertSourceResource,
 		NewImRoutingRuleResource,
 		NewImOrgSettingsResource,
+		NewOrgUserResource,
+		NewOrgSettingsResource,
+		NewWhitelabelDomainResource,
+		NewReportResource,
+		NewSMTPSettingsResource,
+		NewAPITokenResource,
+		NewCustomerAPITokenResource,
 	}
 }
 
@@ -111,6 +118,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewUserDataSource,
 		NewImAlertSourceDataSource,
 		NewImRoutingRuleDataSource,
+		NewOrganizationDataSource,
+		NewPackageConfigsDataSource,
 	}
 }
 
