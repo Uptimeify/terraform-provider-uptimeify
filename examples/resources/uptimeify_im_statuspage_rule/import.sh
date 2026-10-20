@@ -1,0 +1,1 @@
+terraform import uptimeify_im_statuspage_rule.acme 17
