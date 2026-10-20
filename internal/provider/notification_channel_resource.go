@@ -77,11 +77,12 @@ func (m *notificationChannelModel) fromAPI(ctx context.Context, ch *client.Notif
 	keys, flags := secretKeys(ch.Type)
 	cfg, set := map[string]any{}, map[string]bool{}
 	for k, v := range ch.Config {
+		b, isBool := v.(bool)
 		switch {
-		case flags[k]:
-			b, _ := v.(bool)
+		// Jedes has<Name>-Flag der API (auch kuenftige wie hasHeaders) ist Zustand, keine Config.
+		case flags[k] || (isBool && len(k) > 3 && strings.HasPrefix(k, "has") && k[3] >= 'A' && k[3] <= 'Z'):
 			set[strings.TrimPrefix(k, "has")] = b
-		case keys[k] || v == nil: // redacted secret, or a key cleared with null
+		case keys[k] || v == nil || k == "headers" || k == "webhookHeaders": // redacted secret (header values come back null), or a key cleared with null
 		default:
 			cfg[k] = v
 		}

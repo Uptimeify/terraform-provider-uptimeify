@@ -22,7 +22,7 @@ var chatWebhookURL = []ChannelSecret{{"webhookUrl", "hasWebhookUrl"}, {"url", "h
 // ChannelSecrets maps a channel type to its secret config keys. The API stores them encrypted and
 // answers them as null plus a has<Secret> flag.
 var ChannelSecrets = map[string][]ChannelSecret{
-	"webhook":       {{"secret", "hasSecret"}},
+	"webhook":       {{"secret", "hasSecret"}, {"webhookHeaders", "hasHeaders"}, {"headers", "hasHeaders"}},
 	"slack":         append([]ChannelSecret{{"secret", "hasSecret"}}, chatWebhookURL...),
 	"discord":       append([]ChannelSecret{{"secret", "hasSecret"}}, chatWebhookURL...),
 	"teams":         chatWebhookURL,
@@ -74,6 +74,9 @@ func (c *Client) CreateNotificationChannel(ctx context.Context, body map[string]
 }
 
 func (c *Client) GetNotificationChannel(ctx context.Context, id string) (*NotificationChannel, error) {
+	if id == "" { // without an id the path would hit the list endpoint
+		return nil, &APIError{StatusCode: http.StatusNotFound, StatusMessage: "no channel id"}
+	}
 	var ch NotificationChannel
 	return &ch, c.Do(ctx, http.MethodGet, "/api/notification-channels/"+url.PathEscape(id), nil, &ch)
 }
