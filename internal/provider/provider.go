@@ -69,16 +69,33 @@ func (p *uptimeifyProvider) Configure(ctx context.Context, req provider.Configur
 }
 
 func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewTagResource,
+	return []func() resource.Resource{
+		NewTagResource,
 		NewMaintenanceWindowResource,
 		NewMonitorTagResource,
+		NewDNSMonitorResource,
+		NewTCPMonitorResource,
+		NewICMPMonitorResource,
+		NewSMTPMonitorResource,
+		NewSSHMonitorResource,
+		NewFTPMonitorResource,
+		NewIMAPPopMonitorResource,
 	}
 }
 
 func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{NewTagDataSource,
+	return []func() datasource.DataSource{
+		NewTagDataSource,
 		NewMaintenanceWindowDataSource,
 		NewMonitoringLocationsDataSource,
+		NewCustomerDataSource,
+		NewDNSMonitorDataSource,
+		NewTCPMonitorDataSource,
+		NewICMPMonitorDataSource,
+		NewSMTPMonitorDataSource,
+		NewSSHMonitorDataSource,
+		NewFTPMonitorDataSource,
+		NewIMAPPopMonitorDataSource,
 	}
 }
 
