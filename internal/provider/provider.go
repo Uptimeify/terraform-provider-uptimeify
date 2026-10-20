@@ -87,6 +87,9 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewIMScheduleResource,
 		NewIMScheduleOverrideResource,
 		NewIMTeamOverrideResource,
+		NewImAlertSourceResource,
+		NewImRoutingRuleResource,
+		NewImOrgSettingsResource,
 	}
 }
 
@@ -106,6 +109,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewWebsiteDataSource,
 		NewIMTeamDataSource,
 		NewUserDataSource,
+		NewImAlertSourceDataSource,
+		NewImRoutingRuleDataSource,
 	}
 }
 
