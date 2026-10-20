@@ -97,6 +97,13 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewStatusPageDomainResource,
 		NewStatusPageDomainActivationResource,
 		NewImStatuspageRuleResource,
+		NewOrgUserResource,
+		NewOrgSettingsResource,
+		NewWhitelabelDomainResource,
+		NewReportResource,
+		NewSMTPSettingsResource,
+		NewAPITokenResource,
+		NewCustomerAPITokenResource,
 	}
 }
 
@@ -123,6 +130,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewImOnCallDataSource,
 		NewStatusPageDataSource,
 		NewImStatuspageRuleDataSource,
+		NewOrganizationDataSource,
+		NewPackageConfigsDataSource,
 	}
 }
 
