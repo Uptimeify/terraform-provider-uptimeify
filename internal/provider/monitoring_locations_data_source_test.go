@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"os"
 	"testing"
 
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -9,11 +8,7 @@ import (
 
 func TestAccMonitoringLocations(t *testing.T) {
 	tfresource.Test(t, tfresource.TestCase{
-		PreCheck: func() {
-			if os.Getenv("UPTIMEIFY_API_TOKEN") == "" {
-				t.Fatal("UPTIMEIFY_API_TOKEN must be set for acceptance tests")
-			}
-		},
+		PreCheck:                 func() { accPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviders,
 		Steps: []tfresource.TestStep{{
 			Config: `

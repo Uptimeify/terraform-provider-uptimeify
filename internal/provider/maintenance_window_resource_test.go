@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -104,11 +103,7 @@ func TestAccMaintenanceWindow(t *testing.T) {
 	var windowID string
 
 	tfresource.Test(t, tfresource.TestCase{
-		PreCheck: func() {
-			if os.Getenv("UPTIMEIFY_API_TOKEN") == "" {
-				t.Fatal("UPTIMEIFY_API_TOKEN must be set for acceptance tests")
-			}
-		},
+		PreCheck:                 func() { accPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
 			if _, err := accClient().GetMaintenanceWindow(context.Background(), windowID); !client.IsNotFound(err) {

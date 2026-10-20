@@ -62,18 +62,3 @@ func (c *Client) UpdateMonitor(ctx context.Context, kind, id string, patch map[s
 func (c *Client) DeleteMonitor(ctx context.Context, kind, id string) error {
 	return c.Do(ctx, http.MethodDelete, "/api/"+kind+"/"+url.PathEscape(id), nil, nil)
 }
-
-// Customer is the short form of GET /api/customers?fields=minimal.
-type Customer struct {
-	ID       int64  `json:"id"`
-	PublicID string `json:"publicId"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-}
-
-// ListCustomers reads every visible customer (fields=minimal: bare array sorted by name; the
-// endpoint has no envelope form).
-func (c *Client) ListCustomers(ctx context.Context) ([]Customer, error) {
-	var out []Customer
-	return out, c.Do(ctx, http.MethodGet, "/api/customers?fields=minimal", nil, &out)
-}

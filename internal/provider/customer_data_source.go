@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/uptimeify/terraform-provider-uptimeify/internal/client"
 )
 
-var _ datasource.DataSourceWithConfigure = &customerDataSource{}
+var (
+	_ datasource.DataSourceWithConfigure        = &customerDataSource{}
+	_ datasource.DataSourceWithConfigValidators = &customerDataSource{}
+)
 
 type customerDataSource struct{ client *client.Client }
 
@@ -31,14 +36,18 @@ func (d *customerDataSource) Metadata(_ context.Context, req datasource.Metadata
 
 func (d *customerDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Look up one customer by exact name. Fails when no or several visible customers have that name.",
+		Description: "Look up one customer by `id` or by `name` (exactly one). Fails when no or several visible customers carry the name.",
 		Attributes: map[string]schema.Attribute{
-			"name":      schema.StringAttribute{Required: true},
-			"id":        schema.StringAttribute{Computed: true, Description: "Numeric customer id, e.g. for `customer_id` of a monitor."},
+			"id":        schema.StringAttribute{Optional: true, Computed: true, Description: "Numeric id or public id. Use `tonumber(id)` for `customer_id` arguments."},
+			"name":      schema.StringAttribute{Optional: true, Computed: true},
 			"public_id": schema.StringAttribute{Computed: true},
 			"status":    schema.StringAttribute{Computed: true, Description: "`active` or `inactive`."},
 		},
 	}
+}
+
+func (d *customerDataSource) ConfigValidators(context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{datasourcevalidator.ExactlyOneOf(path.MatchRoot("id"), path.MatchRoot("name"))}
 }
 
 func (d *customerDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
@@ -53,26 +62,38 @@ func (d *customerDataSource) Read(ctx context.Context, req datasource.ReadReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	customers, err := d.client.ListCustomers(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Listing customers failed", err.Error())
-		return
-	}
-	name := cfg.Name.ValueString()
-	var matches []client.Customer
-	for _, c := range customers {
-		if c.Name == name {
-			matches = append(matches, c)
+	var found *client.Customer
+	if !cfg.ID.IsNull() {
+		c, err := d.client.GetCustomer(ctx, cfg.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Reading customer failed", err.Error())
+			return
 		}
+		found = c
+	} else {
+		all, err := d.client.ListCustomers(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Listing customers failed", err.Error())
+			return
+		}
+		var matches []client.Customer
+		for _, c := range all {
+			if c.Name == cfg.Name.ValueString() {
+				matches = append(matches, c)
+			}
+		}
+		if len(matches) != 1 {
+			resp.Diagnostics.AddError("Customer lookup by name failed",
+				fmt.Sprintf("%d visible customers are named %q, expected exactly 1. Use id instead.", len(matches), cfg.Name.ValueString()))
+			return
+		}
+		found = &matches[0]
 	}
-	if len(matches) != 1 {
-		resp.Diagnostics.AddError("Customer lookup by name failed",
-			fmt.Sprintf("%d visible customers are named %q, expected exactly 1.", len(matches), name))
-		return
+	if cfg.ID.IsNull() {
+		cfg.ID = types.StringValue(strconv.FormatInt(found.ID, 10))
 	}
-	c := matches[0]
-	cfg.ID = types.StringValue(strconv.FormatInt(c.ID, 10))
-	cfg.PublicID = types.StringValue(c.PublicID)
-	cfg.Status = types.StringValue(c.Status)
+	cfg.PublicID = types.StringValue(found.PublicID)
+	cfg.Name = types.StringValue(found.Name)
+	cfg.Status = types.StringValue(found.Status)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cfg)...)
 }

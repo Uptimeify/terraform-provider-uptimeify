@@ -80,6 +80,7 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewSSHMonitorResource,
 		NewFTPMonitorResource,
 		NewIMAPPopMonitorResource,
+		NewWebsiteResource,
 	}
 }
 
@@ -96,6 +97,7 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewSSHMonitorDataSource,
 		NewFTPMonitorDataSource,
 		NewIMAPPopMonitorDataSource,
+		NewWebsiteDataSource,
 	}
 }
 

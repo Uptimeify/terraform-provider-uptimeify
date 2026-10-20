@@ -176,6 +176,7 @@ func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck,
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("TF_ACC not set")
 	}
+	accPreCheck(t)
 	customer := accCustomerName(t)
 	addr := "uptimeify_" + typ + "_monitor.m"
 	var id string
@@ -192,11 +193,7 @@ func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck,
 	cfgUpdate := monitorConfig(customer, typ, update)
 
 	tfresource.Test(t, tfresource.TestCase{
-		PreCheck: func() {
-			if os.Getenv("UPTIMEIFY_API_TOKEN") == "" {
-				t.Fatal("UPTIMEIFY_API_TOKEN must be set for acceptance tests")
-			}
-		},
+		PreCheck:                 func() { accPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
 			if _, err := accClient().GetMonitor(context.Background(), kind, id); !client.IsNotFound(err) {
