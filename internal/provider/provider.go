@@ -81,6 +81,9 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewFTPMonitorResource,
 		NewIMAPPopMonitorResource,
 		NewWebsiteResource,
+		NewImAlertSourceResource,
+		NewImRoutingRuleResource,
+		NewImOrgSettingsResource,
 	}
 }
 
@@ -98,6 +101,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewFTPMonitorDataSource,
 		NewIMAPPopMonitorDataSource,
 		NewWebsiteDataSource,
+		NewImAlertSourceDataSource,
+		NewImRoutingRuleDataSource,
 	}
 }
 
