@@ -300,7 +300,8 @@ func TestAccEscalationConfig(t *testing.T) {
 							return err
 						}
 						e, err := accClient().GetEscalationConfig(context.Background(), orgID)
-						if err == nil && e.WebhookHeaders["X-Tfacc"] != "1" {
+						// Seit dem Schwaerzen der Header-Werte (API, 21.10.) liefert GET nur noch den Namen.
+						if _, ok := e.WebhookHeaders["X-Tfacc"]; err == nil && !ok {
 							err = fmt.Errorf("write-only headers not stored: %v", e.WebhookHeaders)
 						}
 						return err
