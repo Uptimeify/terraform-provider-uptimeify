@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -25,7 +24,7 @@ import (
 func TestOrgSchemasValid(t *testing.T) {
 	ctx := context.Background()
 	for _, f := range []func() resource.Resource{NewOrgUserResource, NewOrgSettingsResource, NewWhitelabelDomainResource,
-		NewReportResource, NewSMTPSettingsResource, NewAPITokenResource, NewCustomerAPITokenResource} {
+		NewReportResource, NewSMTPSettingsResource} {
 		var resp resource.SchemaResponse
 		f().Schema(ctx, resource.SchemaRequest{}, &resp)
 		if d := resp.Schema.ValidateImplementation(ctx); d.HasError() {
@@ -530,94 +529,5 @@ resource "uptimeify_smtp_settings" "s" {
 			},
 			{Config: cfg("tfacc-2", 2)},
 		},
-	})
-}
-
-func TestAccCustomerAPIToken(t *testing.T) {
-	orgAccStart(t)
-	name := "tfacc-token-" + accSuffix()
-	var tokenID int64
-	cfg := func(n string) string {
-		return accCustomerConfig(t) + fmt.Sprintf(`
-resource "uptimeify_customer_api_token" "t" {
-  name            = %q
-  customer_id     = tonumber(data.uptimeify_customer.c.id)
-  expires_in_days = 30
-}
-`, n)
-	}
-	setID := func(s *terraform.State) error {
-		var err error
-		tokenID, err = strconv.ParseInt(s.RootModule().Resources["uptimeify_customer_api_token.t"].Primary.ID, 10, 64)
-		return err
-	}
-	tfresource.Test(t, tfresource.TestCase{
-		PreCheck:                 func() { accPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProviders,
-		CheckDestroy: func(*terraform.State) error {
-			if _, err := accClient().GetAPIToken(context.Background(), "/api/customer/tokens", tokenID); !client.IsNotFound(err) {
-				return fmt.Errorf("token %d still exists (err=%v)", tokenID, err)
-			}
-			return nil
-		},
-		Steps: []tfresource.TestStep{
-			{
-				Config: cfg(name),
-				Check: tfresource.ComposeAggregateTestCheckFunc(
-					tfresource.TestMatchResourceAttr("uptimeify_customer_api_token.t", "token", regexp.MustCompile(`^wsm_[0-9a-f]{64}$`)),
-					tfresource.TestCheckResourceAttrSet("uptimeify_customer_api_token.t", "expires_at"),
-					tfresource.TestCheckResourceAttrSet("uptimeify_customer_api_token.t", "token_hint"),
-					tfresource.TestCheckResourceAttrPair("uptimeify_customer_api_token.t", "customer_id", "data.uptimeify_customer.c", "id"),
-					setID,
-				),
-			},
-			{ // no PATCH in the contract: a new name is a new token
-				Config: cfg(name + "-2"),
-				Check: tfresource.ComposeAggregateTestCheckFunc(
-					tfresource.TestCheckResourceAttr("uptimeify_customer_api_token.t", "name", name+"-2"),
-					func(s *terraform.State) error {
-						old := tokenID
-						if err := setID(s); err != nil || tokenID == old {
-							return fmt.Errorf("token not replaced (err=%v)", err)
-						}
-						return nil
-					},
-				),
-			},
-			{
-				ResourceName:            "uptimeify_customer_api_token.t",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"token", "expires_in_days", "last_used_at"},
-			},
-			{
-				PreConfig: func() {
-					accPreCheck(t)
-					if err := accClient().DeleteAPIToken(context.Background(), "/api/customer/tokens", tokenID); err != nil {
-						t.Fatal(err)
-					}
-				},
-				Config:             cfg(name + "-2"),
-				PlanOnly:           true,
-				ExpectNonEmptyPlan: true,
-			},
-			{Config: cfg(name + "-2"), Check: setID},
-		},
-	})
-}
-
-// Acceptance: the API refuses API tokens on /api/organization/tokens; the resource must say so.
-func TestAccAPITokenRefusedForAPITokens(t *testing.T) {
-	tfresource.Test(t, tfresource.TestCase{
-		PreCheck:                 func() { accPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProviders,
-		Steps: []tfresource.TestStep{{
-			Config: imProviderBlock() + `
-resource "uptimeify_api_token" "t" {
-  name = "tfacc-orgtoken"
-}
-`,
-			ExpectError: regexp.MustCompile(`signed-in admin session`),
-		}},
 	})
 }

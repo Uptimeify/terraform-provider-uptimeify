@@ -108,14 +108,14 @@ func (r *orgSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "The organization id.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"name":          str("Organization name.", stringvalidator.LengthBetween(1, 255)),
-			"company_name":  str("Company name on invoices."),
-			"street":        str("Billing address."),
-			"postal_code":   str("Billing address."),
-			"city":          str("Billing address."),
-			"country":       str("Billing country (free text; the server derives the ISO code). Changing it resets the VAT check."),
-			"vat_id":        str("VAT ID. Changing it resets the VIES verdict until it is validated again."),
-			"billing_email": str("Address for invoices (admins only)."),
+			"name":                  str("Organization name.", stringvalidator.LengthBetween(1, 255)),
+			"company_name":          str("Company name on invoices."),
+			"street":                str("Billing address."),
+			"postal_code":           str("Billing address."),
+			"city":                  str("Billing address."),
+			"country":               str("Billing country (free text; the server derives the ISO code). Changing it resets the VAT check."),
+			"vat_id":                str("VAT ID. Changing it resets the VIES verdict until it is validated again."),
+			"billing_email":         str("Address for invoices (admins only)."),
 			"require_mfa_admins":    mfa("admins"),
 			"require_mfa_editors":   mfa("team editors"),
 			"require_mfa_readonly":  mfa("team readonly members"),
@@ -270,7 +270,8 @@ func (r *orgSettingsResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 // Delete leaves the organization as it is.
-func (r *orgSettingsResource) Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse) {}
+func (r *orgSettingsResource) Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse) {
+}
 
 func (r *orgSettingsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)

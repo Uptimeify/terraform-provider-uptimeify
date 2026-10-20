@@ -59,7 +59,9 @@ func (r *smtpSettingsResource) Metadata(_ context.Context, req resource.Metadata
 }
 
 func (r *smtpSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	trimmed := func(min, max int) []validator.String { return []validator.String{stringvalidator.LengthBetween(min, max)} }
+	trimmed := func(min, max int) []validator.String {
+		return []validator.String{stringvalidator.LengthBetween(min, max)}
+	}
 	resp.Schema = schema.Schema{
 		Description: "The organization's own SMTP server for outgoing mail (one per organization). Destroying it switches " +
 			"back to platform sending (`disable`). The host must resolve to a public address. Organization admins only. " +

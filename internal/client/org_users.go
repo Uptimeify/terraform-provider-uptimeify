@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -172,50 +171,6 @@ type PackageConfig struct {
 func (c *Client) ListPackageConfigs(ctx context.Context) ([]PackageConfig, error) {
 	var out []PackageConfig
 	return out, c.Do(ctx, http.MethodGet, "/api/package-configs", nil, &out)
-}
-
-// APIToken is one row of the token lists (organization and customer tokens share the shape).
-type APIToken struct {
-	ID         int64   `json:"id"`
-	Name       string  `json:"name"`
-	CustomerID *int64  `json:"customerId"`
-	LastUsedAt *string `json:"lastUsedAt"`
-	ExpiresAt  *string `json:"expiresAt"`
-	CreatedAt  string  `json:"createdAt"`
-	TokenHint  string  `json:"tokenHint"`
-	Token      string  `json:"token"` // POST answer only
-}
-
-type APITokenCreate struct {
-	Name          string `json:"name"`
-	ExpiresInDays *int64 `json:"expiresInDays,omitempty"`
-	CustomerID    *int64 `json:"customerId,omitempty"`
-}
-
-// tokenBase is /api/organization/tokens or /api/customer/tokens.
-func (c *Client) CreateAPIToken(ctx context.Context, base string, in APITokenCreate) (*APIToken, error) {
-	var t APIToken
-	return &t, c.Do(ctx, http.MethodPost, base, in, &t)
-}
-
-// GetAPIToken finds the token in the list (there is no single GET); a missing id is a 404.
-func (c *Client) GetAPIToken(ctx context.Context, base string, id int64) (*APIToken, error) {
-	var out struct {
-		Items []APIToken `json:"items"`
-	}
-	if err := c.Do(ctx, http.MethodGet, base+"?envelope=items", nil, &out); err != nil {
-		return nil, err
-	}
-	for i := range out.Items {
-		if out.Items[i].ID == id {
-			return &out.Items[i], nil
-		}
-	}
-	return nil, &APIError{StatusCode: http.StatusNotFound, StatusMessage: fmt.Sprintf("token %d not found", id)}
-}
-
-func (c *Client) DeleteAPIToken(ctx context.Context, base string, id int64) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("%s/%d", base, id), nil, nil)
 }
 
 // SMTPSettings is the `smtp` object of GET/PATCH /api/organization/smtp.
