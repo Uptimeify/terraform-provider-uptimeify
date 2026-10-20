@@ -90,6 +90,11 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewImAlertSourceResource,
 		NewImRoutingRuleResource,
 		NewImOrgSettingsResource,
+		NewStatusPageResource,
+		NewStatusPageDesignResource,
+		NewStatusPageDomainResource,
+		NewStatusPageDomainActivationResource,
+		NewImStatuspageRuleResource,
 	}
 }
 
@@ -111,6 +116,8 @@ func (p *uptimeifyProvider) DataSources(context.Context) []func() datasource.Dat
 		NewUserDataSource,
 		NewImAlertSourceDataSource,
 		NewImRoutingRuleDataSource,
+		NewStatusPageDataSource,
+		NewImStatuspageRuleDataSource,
 	}
 }
 
