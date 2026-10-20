@@ -22,7 +22,9 @@ var (
 
 type notificationChannelDataSource struct{ client *client.Client }
 
-func NewNotificationChannelDataSource() datasource.DataSource { return &notificationChannelDataSource{} }
+func NewNotificationChannelDataSource() datasource.DataSource {
+	return &notificationChannelDataSource{}
+}
 
 func (d *notificationChannelDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_notification_channel"

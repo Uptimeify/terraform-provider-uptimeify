@@ -238,7 +238,9 @@ func (m *customerResourceModel) overrideBody(body map[string]any, state *custome
 // overridesApplied compares the POST answer with the plan: the API drops overrides silently
 // for callers without organization write access.
 func (m *customerResourceModel) overridesApplied(c *client.CustomerDetail) bool {
-	eq := func(p types.Bool, got *bool) bool { return p.IsNull() && got == nil || got != nil && p.ValueBool() == *got }
+	eq := func(p types.Bool, got *bool) bool {
+		return p.IsNull() && got == nil || got != nil && p.ValueBool() == *got
+	}
 	return eq(m.AllowSelfService, c.AllowSelfService) && eq(m.CanEditManaged, c.CanEditManaged) &&
 		eq(m.EnableEmailAlerts, c.EnableEmailAlerts) && eq(m.EnableSmsAlerts, c.EnableSmsAlerts) &&
 		eq(m.EnableWebhookAlerts, c.EnableWebhookAlerts) && eq(m.EnableIntegrationAlerts, c.EnableIntegrationAlerts) &&
