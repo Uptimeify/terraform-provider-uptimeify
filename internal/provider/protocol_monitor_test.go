@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,7 +173,8 @@ resource "uptimeify_%s_monitor" "m" {
 }
 
 // testAccMonitor runs create, update in place (+ data source by id), import, drift and destroy.
-func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck, updateCheck tfresource.TestCheckFunc) {
+// importIgnore names attributes the API cannot return (write-only secrets and their *_wo_version).
+func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck, updateCheck tfresource.TestCheckFunc, importIgnore ...string) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("TF_ACC not set")
 	}
@@ -214,11 +216,10 @@ func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck,
 			{
 				Config: cfgUpdate + fmt.Sprintf("\ndata \"uptimeify_%s_monitor\" \"by_id\" { id = %s.public_id }\n", typ, addr),
 				Check: tfresource.ComposeAggregateTestCheckFunc(updateCheck, sameID,
-					tfresource.TestCheckResourceAttrPair("data.uptimeify_"+typ+"_monitor.by_id", "name", addr, "name"),
-					tfresource.TestCheckResourceAttrPair("data.uptimeify_"+typ+"_monitor.by_id", "hostname", addr, "hostname"),
+					accDataSourceMatches("data.uptimeify_"+typ+"_monitor.by_id", addr),
 				),
 			},
-			{ResourceName: addr, ImportState: true, ImportStateVerify: true},
+			{ResourceName: addr, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: importIgnore},
 			{ // drift: deleted outside Terraform -> plan not empty
 				PreConfig: func() {
 					if err := accClient().DeleteMonitor(context.Background(), kind, id); err != nil {
@@ -232,6 +233,30 @@ func testAccMonitor(t *testing.T, typ, kind, create, update string, createCheck,
 			{Config: cfgUpdate, Check: saveID}, // recreate; the framework then destroys, CheckDestroy verifies
 		},
 	})
+}
+
+// accDataSourceMatches: every attribute the data source reads (except its lookup key `id`)
+// equals the resource's value, so a field the data source maps differently fails the test.
+func accDataSourceMatches(ds, res string) tfresource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		d, r := s.RootModule().Resources[ds], s.RootModule().Resources[res]
+		if d == nil || r == nil {
+			return fmt.Errorf("%s or %s not in state", ds, res)
+		}
+		for k, v := range d.Primary.Attributes {
+			// id, Attributanzahl und write-only-Felder fuehrt die Data Source bewusst nicht.
+			if k == "id" || k == "%" || strings.HasSuffix(k, "_wo") || strings.HasSuffix(k, "_wo_version") {
+				continue
+			}
+			if got, ok := r.Primary.Attributes[k]; !ok || got != v {
+				return fmt.Errorf("%s.%s = %q, %s.%s = %q (present=%t)", ds, k, v, res, k, got, ok)
+			}
+		}
+		if len(d.Primary.Attributes) < 5 {
+			return fmt.Errorf("%s read almost nothing: %v", ds, d.Primary.Attributes)
+		}
+		return nil
+	}
 }
 
 func accName(typ string) string { return fmt.Sprintf("tfacc-%s-%d", typ, time.Now().Unix()%1_000_000) }
@@ -333,5 +358,157 @@ func TestAccICMPMonitor(t *testing.T) {
 			tfresource.TestCheckResourceAttr(a, "ping_count", "3"),
 			tfresource.TestCheckResourceAttr(a, "status", "maintenance"),
 		),
+	)
+}
+
+// SMTP, SSH, FTP and IMAP/POP3 run the same SSRF guard on create/patch, so the targets are
+// public IP literals. The checks never run against them in the sandbox (no internet).
+func TestAccSMTPMonitor(t *testing.T) {
+	name := accName("smtp")
+	a := "uptimeify_smtp_monitor.m"
+	testAccMonitor(t, "smtp", "smtp-monitors",
+		fmt.Sprintf(`
+  name                 = %q
+  hostname             = "1.1.1.1"
+  auth_user            = "tfacc"
+  auth_pass_wo         = "tfacc-secret-1"
+  auth_pass_wo_version = 1
+`, name),
+		fmt.Sprintf(`
+  name                 = "%s-2"
+  hostname             = "8.8.8.8"
+  port                 = 587
+  require_tls          = true
+  auth_user            = "tfacc-2"
+  auth_pass_wo         = "tfacc-secret-2"
+  auth_pass_wo_version = 2
+  timeout_seconds      = 15
+`, name),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "check_mode", "protocol"),
+			tfresource.TestCheckResourceAttr(a, "auth_user", "tfacc"),
+			tfresource.TestCheckResourceAttr(a, "secure", "false"),
+			tfresource.TestCheckNoResourceAttr(a, "auth_pass_wo"),
+		),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "hostname", "8.8.8.8"),
+			tfresource.TestCheckResourceAttr(a, "port", "587"),
+			tfresource.TestCheckResourceAttr(a, "require_tls", "true"),
+			tfresource.TestCheckResourceAttr(a, "auth_user", "tfacc-2"),
+			tfresource.TestCheckResourceAttr(a, "auth_pass_wo_version", "2"),
+			tfresource.TestCheckNoResourceAttr(a, "auth_pass_wo"),
+			tfresource.TestCheckNoResourceAttr("data.uptimeify_smtp_monitor.by_id", "auth_pass_wo"),
+		),
+		"auth_pass_wo", "auth_pass_wo_version",
+	)
+}
+
+func TestAccSSHMonitor(t *testing.T) {
+	name := accName("ssh")
+	a := "uptimeify_ssh_monitor.m"
+	testAccMonitor(t, "ssh", "ssh-monitors",
+		fmt.Sprintf(`
+  name               = %q
+  hostname           = "1.1.1.1"
+  username           = "tfacc"
+  password_wo        = "tfacc-secret-1"
+  secrets_wo_version = 1
+`, name),
+		fmt.Sprintf(`
+  name               = "%s-2"
+  hostname           = "8.8.8.8"
+  port               = 2222
+  username           = "tfacc-2"
+  password_wo        = "tfacc-secret-2"
+  secrets_wo_version = 2
+  status             = "disabled"
+`, name),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "username", "tfacc"),
+			tfresource.TestCheckNoResourceAttr(a, "password_wo"),
+		),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "port", "2222"),
+			tfresource.TestCheckResourceAttr(a, "username", "tfacc-2"),
+			tfresource.TestCheckResourceAttr(a, "secrets_wo_version", "2"),
+			tfresource.TestCheckResourceAttr(a, "status", "disabled"),
+			tfresource.TestCheckNoResourceAttr(a, "password_wo"),
+			tfresource.TestCheckNoResourceAttr("data.uptimeify_ssh_monitor.by_id", "password_wo"),
+		),
+		"password_wo", "private_key_wo", "passphrase_wo", "secrets_wo_version",
+	)
+}
+
+func TestAccFTPMonitor(t *testing.T) {
+	name := accName("ftp")
+	a := "uptimeify_ftp_monitor.m"
+	testAccMonitor(t, "ftp", "ftp-monitors",
+		fmt.Sprintf(`
+  name                = %q
+  hostname            = "1.1.1.1"
+  user                = "tfacc"
+  password_wo         = "tfacc-secret-1"
+  password_wo_version = 1
+`, name),
+		fmt.Sprintf(`
+  name                = "%s-2"
+  hostname            = "8.8.8.8"
+  port                = 2121
+  tls_mode            = "explicit"
+  user                = "tfacc-2"
+  password_wo         = "tfacc-secret-2"
+  password_wo_version = 2
+`, name),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "tls_mode", "none"),
+			tfresource.TestCheckResourceAttr(a, "user", "tfacc"),
+			tfresource.TestCheckNoResourceAttr(a, "password_wo"),
+		),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "port", "2121"),
+			tfresource.TestCheckResourceAttr(a, "tls_mode", "explicit"),
+			tfresource.TestCheckResourceAttr(a, "user", "tfacc-2"),
+			tfresource.TestCheckResourceAttr(a, "password_wo_version", "2"),
+			tfresource.TestCheckResourceAttr("data.uptimeify_ftp_monitor.by_id", "tls_mode", "explicit"),
+		),
+		"password_wo", "password_wo_version",
+	)
+}
+
+func TestAccIMAPPOPMonitor(t *testing.T) {
+	name := accName("imap")
+	a := "uptimeify_imap_pop_monitor.m"
+	testAccMonitor(t, "imap_pop", "imap-pop-monitors",
+		fmt.Sprintf(`
+  name                = %q
+  hostname            = "1.1.1.1"
+  user                = "tfacc"
+  password_wo         = "tfacc-secret-1"
+  password_wo_version = 1
+`, name),
+		fmt.Sprintf(`
+  name                    = "%s-2"
+  hostname                = "8.8.8.8"
+  protocol                = "pop3"
+  tls                     = true
+  tls_reject_unauthorized = false
+  user                    = "tfacc-2"
+  password_wo             = "tfacc-secret-2"
+  password_wo_version     = 2
+`, name),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "protocol", "imap"),
+			tfresource.TestCheckResourceAttr(a, "tls", "false"),
+			tfresource.TestCheckResourceAttr(a, "tls_reject_unauthorized", "true"),
+			tfresource.TestCheckNoResourceAttr(a, "password_wo"),
+		),
+		tfresource.ComposeAggregateTestCheckFunc(
+			tfresource.TestCheckResourceAttr(a, "protocol", "pop3"),
+			tfresource.TestCheckResourceAttr(a, "tls", "true"),
+			tfresource.TestCheckResourceAttr(a, "tls_reject_unauthorized", "false"),
+			tfresource.TestCheckResourceAttr(a, "user", "tfacc-2"),
+			tfresource.TestCheckResourceAttr("data.uptimeify_imap_pop_monitor.by_id", "protocol", "pop3"),
+		),
+		"password_wo", "password_wo_version",
 	)
 }

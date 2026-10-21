@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -437,6 +438,70 @@ data "uptimeify_im_statuspage_rule" "by_id" { id = uptimeify_im_statuspage_rule.
 				ExpectNonEmptyPlan: true,
 			},
 			{Config: step2, Check: spSaveID(r, &ruleID)},
+		},
+	})
+}
+
+// Acceptance (error path): the sandbox has no DNS, so verify fails. The activation must fail once
+// (no retry), name the TXT record and its value in the message, and leave nothing in state.
+func TestAccStatusPageDomainActivationVerifyFails(t *testing.T) {
+	spAccSkip(t)
+	name := fmt.Sprintf("tfacc-spact-%d", time.Now().UnixNano()%1_000_000)
+	var pageID, domainID string
+	base := statusPageConfig(t, name, name, "") + fmt.Sprintf(`
+resource "uptimeify_status_page_domain" "d" {
+  status_page_id = tonumber(uptimeify_status_page.p.id)
+  hostname       = %q
+}
+`, name+".example.com")
+	// Filled from the domain's state in step 1; Terraform wraps long diagnostics at spaces.
+	expect := regexp.MustCompile(`unset`)
+	saveRecord := func(s *terraform.State) error {
+		a := s.RootModule().Resources["uptimeify_status_page_domain.d"].Primary.Attributes
+		*expect = *regexp.MustCompile(`(?s)Verifying status page domain failed.*TXT\s+record\s+"` +
+			regexp.QuoteMeta(a["verification_record.name"]) + `"\s+with\s+the\s+value\s+"` +
+			regexp.QuoteMeta(a["verification_record.value"]) + `"`)
+		return nil
+	}
+
+	tfresource.Test(t, tfresource.TestCase{
+		PreCheck:                 func() { accPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy: func(*terraform.State) error {
+			id, _ := strconv.ParseInt(domainID, 10, 64)
+			if _, _, err := accClient().GetStatusPageDomain(context.Background(), id); !client.IsNotFound(err) {
+				return fmt.Errorf("domain %s still exists (err=%v)", domainID, err)
+			}
+			return statusPageGone(&pageID)(nil)
+		},
+		Steps: []tfresource.TestStep{
+			{
+				Config: base,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					spSaveID("uptimeify_status_page.p", &pageID),
+					spSaveID("uptimeify_status_page_domain.d", &domainID),
+					tfresource.TestCheckResourceAttrSet("uptimeify_status_page_domain.d", "verification_record.name"),
+					tfresource.TestCheckResourceAttrSet("uptimeify_status_page_domain.d", "verification_record.value"),
+					saveRecord,
+				),
+			},
+			{
+				Config: base + `
+resource "uptimeify_status_page_domain_activation" "a" {
+  domain_id = tonumber(uptimeify_status_page_domain.d.id)
+}
+`,
+				ExpectError: expect,
+			},
+			{ // the failed create stored nothing
+				Config: base,
+				Check: func(s *terraform.State) error {
+					if r := s.RootModule().Resources["uptimeify_status_page_domain_activation.a"]; r != nil {
+						return fmt.Errorf("activation in state after failed verify: %v", r.Primary.Attributes)
+					}
+					return nil
+				},
+			},
 		},
 	})
 }

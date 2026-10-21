@@ -454,12 +454,22 @@ resource "uptimeify_report" "r" {
 	})
 }
 
-// Acceptance: skipped when the organization already sends through its own SMTP server, so a
-// shared organization's real configuration is never replaced. The host must resolve publicly
-// (UPTIMEIFY_ACC_SMTP_HOST, default example.com); mail of the organization fails while the test runs.
+// Acceptance: runs against its own organization (UPTIMEIFY_ACC_TOKEN_SMTP, an org-admin token of an
+// organization without its own SMTP server), because the sandbox's main organization already has
+// one and its real configuration is never replaced. The server checks a new host with
+// resolvePublicHostnameTarget: a public IP literal needs no DNS (UPTIMEIFY_ACC_SMTP_HOST, default
+// 1.1.1.1). Mail of that organization fails while the test runs.
 func TestAccSMTPSettings(t *testing.T) {
 	orgAccStart(t)
-	cur, err := accClient().GetSMTP(context.Background())
+	token := os.Getenv("UPTIMEIFY_ACC_TOKEN_SMTP")
+	if token == "" {
+		t.Skip("UPTIMEIFY_ACC_TOKEN_SMTP not set: needs an org-admin token of an organization without its own SMTP server")
+	}
+	smtpClient := func() *client.Client {
+		accPreCheck(t)
+		return client.New(os.Getenv("UPTIMEIFY_ENDPOINT"), token, "test")
+	}
+	cur, err := smtpClient().GetSMTP(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,10 +478,14 @@ func TestAccSMTPSettings(t *testing.T) {
 	}
 	host := os.Getenv("UPTIMEIFY_ACC_SMTP_HOST")
 	if host == "" {
-		host = "example.com"
+		host = "1.1.1.1"
 	}
 	cfg := func(fromName string, ver int) string {
 		return imProviderBlock() + fmt.Sprintf(`
+provider "uptimeify" {
+  api_token = %q
+}
+
 resource "uptimeify_smtp_settings" "s" {
   host                = %q
   port                = 587
@@ -482,13 +496,13 @@ resource "uptimeify_smtp_settings" "s" {
   from_name           = %q
   from_email          = "tfacc-smtp@example.test"
 }
-`, host, ver, ver, fromName)
+`, token, host, ver, ver, fromName)
 	}
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProviders,
 		CheckDestroy: func(*terraform.State) error {
-			s, err := accClient().GetSMTP(context.Background())
+			s, err := smtpClient().GetSMTP(context.Background())
 			if err != nil {
 				return err
 			}
@@ -519,7 +533,8 @@ resource "uptimeify_smtp_settings" "s" {
 			{ // drift: switched back to platform sending outside Terraform
 				PreConfig: func() {
 					accPreCheck(t)
-					if _, err := accClient().UpdateSMTP(context.Background(), map[string]any{"disable": true}); err != nil {
+					// Immer ueber die Test-Org: das Org-2-Token schaltete am 21.10. den SMTP von Org 2 ab.
+					if _, err := smtpClient().UpdateSMTP(context.Background(), map[string]any{"disable": true}); err != nil {
 						t.Fatal(err)
 					}
 				},
