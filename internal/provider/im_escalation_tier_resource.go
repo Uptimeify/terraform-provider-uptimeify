@@ -218,10 +218,13 @@ func (r *imTierResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Two tiers created at once race for the next tierOrder; the API answers 409 imTierOrderConflict.
 	// A tierOrder past the end (422 imInvalidNumber, e.g. tier 3 created before tier 2) is appended:
 	// the last position, as documented.
+	// All configured settings go into the one POST: diffing the plan against an empty model sends
+	// every set value and leaves unset ones (severities, repeats_after_minutes) to the API default.
+	settings := imTierPatch(ctx, &plan, &imTierModel{AutoEscalationSeverities: types.SetNull(types.StringType)})
 	var tier *client.IMTier
 	var err error
 	for attempt := 0; attempt < 4; attempt++ {
-		tier, err = r.client.CreateIMTier(ctx, teamID, plan.memberIDs(), tierOrder)
+		tier, err = r.client.CreateIMTier(ctx, teamID, plan.memberIDs(), tierOrder, settings)
 		var apiErr *client.APIError
 		if !errors.As(err, &apiErr) {
 			break
@@ -241,15 +244,6 @@ func (r *imTierResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	cur := imTierModel{DefaultScheduleID: types.Int64Null()}
 	cur.fromAPI(teamID, tier)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &cur)...) // from here on a failure taints, not orphans
-
-	if p := imTierPatch(ctx, &plan, &cur); len(p) > 0 {
-		if err := r.client.UpdateIMTier(ctx, teamID, tier.ID, p); err != nil {
-			resp.Diagnostics.AddError("Configuring escalation tier failed", err.Error())
-			return
-		}
-	}
-	r.readInto(ctx, &cur, resp.Diagnostics.AddError)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cur)...)
 }
 

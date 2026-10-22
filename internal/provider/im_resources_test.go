@@ -160,8 +160,8 @@ func TestIMOverridePatch(t *testing.T) {
 	}
 }
 
-// Unit: create sends tier_order in the POST; a position past the end (422 imInvalidNumber) is
-// appended instead, without a reorder call.
+// Unit: create sends tier_order and every configured setting in ONE POST (no follow-up PATCH or GET);
+// a position past the end (422 imInvalidNumber) is appended instead, settings still included.
 func TestIMTierCreateTierOrder(t *testing.T) {
 	var bodies []map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -175,12 +175,9 @@ func TestIMTierCreateTierOrder(t *testing.T) {
 				_, _ = w.Write([]byte(`{"statusCode":422,"statusMessage":"tierOrder must be between 1 and 1","data":{"code":"imInvalidNumber"}}`))
 				return
 			}
-			_, _ = w.Write([]byte(`{"id":21,"tierOrder":1,"autoEscalationEnabled":true,"autoEscalationAfterMinutes":5,"autoEscalationStopMode":"acknowledged",
-				"autoEscalationTimeFilters":[],"repeats":0,"repeatsStopMode":"acknowledged","schedules":[{"id":31}]}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/im/teams/7/tiers/21":
-			_, _ = w.Write([]byte(`{"id":21,"tierOrder":1,"autoEscalationEnabled":true,"autoEscalationAfterMinutes":5,"autoEscalationStopMode":"acknowledged",
-				"autoEscalationTimeFilters":[],"repeats":0,"repeatsStopMode":"acknowledged",
-				"schedules":[{"id":31,"rotations":[{"id":1,"rotationOrder":1,"members":[{"userId":"u","memberOrder":0}]}]}]}`))
+			_, _ = w.Write([]byte(`{"id":21,"tierOrder":1,"autoEscalationEnabled":true,"autoEscalationAfterMinutes":10,"autoEscalationStopMode":"resolved",
+				"autoEscalationSeverities":["critical"],"autoEscalationTimeFilters":[],"repeats":2,"repeatsAfterMinutes":3,"repeatsStopMode":"acknowledged",
+				"schedules":[{"id":31,"rotations":[{"id":1,"rotationOrder":1,"members":[{"userId":"u","memberOrder":1}]}]}]}`))
 		default:
 			t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -195,9 +192,9 @@ func TestIMTierCreateTierOrder(t *testing.T) {
 	plan := tfsdk.Plan{Schema: sch.Schema}
 	if d := plan.Set(ctx, &imTierModel{ID: types.StringUnknown(), TeamID: types.Int64Value(7), TierID: types.Int64Unknown(), TierOrder: types.Int64Value(3),
 		MemberUserIDs: []types.String{types.StringValue("u")}, DefaultScheduleID: types.Int64Unknown(), AutoEscalationEnabled: types.BoolValue(true),
-		AutoEscalationAfterMinutes: types.Int64Value(5), AutoEscalationStopMode: types.StringValue("acknowledged"), AutoEscalationSeverities: types.SetNull(types.StringType),
-		AutoEscalationTimeFilters: []weeklyWindowModel{}, Repeats: types.Int64Value(0), RepeatsAfterMinutes: types.Int64Null(),
-		RepeatsStopMode: types.StringValue("acknowledged")}); d.HasError() {
+		AutoEscalationAfterMinutes: types.Int64Value(10), AutoEscalationStopMode: types.StringValue("resolved"),
+		AutoEscalationSeverities: stringSetValue([]string{"critical"}), AutoEscalationTimeFilters: []weeklyWindowModel{}, Repeats: types.Int64Value(2),
+		RepeatsAfterMinutes: types.Int64Value(3), RepeatsStopMode: types.StringValue("acknowledged")}); d.HasError() {
 		t.Fatal(d)
 	}
 	resp := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
@@ -208,10 +205,17 @@ func TestIMTierCreateTierOrder(t *testing.T) {
 	if len(bodies) != 2 || bodies[0]["tierOrder"] != float64(3) {
 		t.Fatalf("POST bodies = %v, want tierOrder 3 then append", bodies)
 	}
+	want := map[string]any{"memberUserIds": []any{"u"}, "autoEscalationEnabled": true, "autoEscalationAfterMinutes": float64(10),
+		"autoEscalationStopMode": "resolved", "autoEscalationSeverities": []any{"critical"}, "repeats": float64(2),
+		"repeatsAfterMinutes": float64(3), "repeatsStopMode": "acknowledged"}
+	if fmt.Sprint(bodies[1]) != fmt.Sprint(want) {
+		t.Fatalf("retry body = %v, want %v", bodies[1], want)
+	}
 	var got imTierModel
 	resp.State.Get(ctx, &got)
-	if got.TierOrder.ValueInt64() != 1 || got.DefaultScheduleID.ValueInt64() != 31 {
-		t.Fatalf("state tier_order %v default_schedule_id %v", got.TierOrder, got.DefaultScheduleID)
+	if got.TierOrder.ValueInt64() != 1 || got.DefaultScheduleID.ValueInt64() != 31 || got.AutoEscalationAfterMinutes.ValueInt64() != 10 ||
+		len(got.MemberUserIDs) != 1 {
+		t.Fatalf("state %+v", got)
 	}
 }
 

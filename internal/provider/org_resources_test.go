@@ -97,25 +97,34 @@ func TestOrgUserUpdateSendsChangedFieldsOnly(t *testing.T) {
 	if got != `{"firstName":"Ann","lastName":"B"}` {
 		t.Fatalf("PATCH body %s", got)
 	}
+
+	planned = base
+	planned.Language = types.StringValue("da")
+	plan.Set(ctx, &planned)
+	r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if got != `{"language":"da"}` {
+		t.Fatalf("PATCH body %s", got)
+	}
 }
 
-// Unit: an unset language is read back (null = organization language); a configured one stays.
+// Unit: language is always read back (drift detection); null means the organization language.
 func TestOrgUserFromAPILanguage(t *testing.T) {
-	en := "en"
+	en, da := "en", "da"
 	var m orgUserModel
 	m.fromAPI(&client.UserDetail{ID: "u1", Language: &en})
 	if m.Language.ValueString() != "en" {
 		t.Fatalf("language %s", m.Language)
 	}
-	da := "da"
 	m.fromAPI(&client.UserDetail{ID: "u1", Language: &da})
-	if m.Language.ValueString() != "en" {
-		t.Fatalf("configured language must stay as written, got %s", m.Language)
+	if m.Language.ValueString() != "da" {
+		t.Fatalf("language %s, want da read back", m.Language)
 	}
-	var unset orgUserModel
-	unset.fromAPI(&client.UserDetail{ID: "u1"})
-	if !unset.Language.IsNull() {
-		t.Fatalf("language %s, want null", unset.Language)
+	m.fromAPI(&client.UserDetail{ID: "u1"})
+	if !m.Language.IsNull() {
+		t.Fatalf("language %s, want null", m.Language)
 	}
 }
 

@@ -43,7 +43,7 @@ resource "uptimeify_user" "shop_owner" {
 - `customer_ids` (Set of Number) Customers a `readonly` login is limited to (customer user). Empty = all customers. Only allowed with `role = "readonly"`.
 - `first_name` (String)
 - `is_active` (Boolean) `false` deactivates the login without deleting it.
-- `language` (String) Language of the login (dashboard, mails); null = organization language. Only sent on create: the API cannot change it later, the person changes it in their profile. Set, the configured value stays in state as written (no drift detection, a later change is not sent); unset, it is read from the API.
+- `language` (String) Language of the login (dashboard, mails, SMS): `de`, `en` or `da`; null = organization language. Always read from the API, so a language the person picks in their profile shows as drift. A change is sent in place (PATCH); removing it from the configuration keeps the current language.
 - `last_name` (String)
 
 ### Read-Only

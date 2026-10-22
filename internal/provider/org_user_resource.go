@@ -67,11 +67,7 @@ func (m *orgUserModel) fromAPI(u *client.UserDetail) {
 	}
 	m.CustomerIDs = types.SetValueMust(types.Int64Type, ids)
 	m.CreatedAt = types.StringValue(u.CreatedAt)
-	// The API cannot change language after the invitation: a configured value stays as written
-	// (no drift detection), an unset one is read back.
-	if m.Language.IsNull() || m.Language.IsUnknown() {
-		m.Language = types.StringPointerValue(u.Language)
-	}
+	m.Language = types.StringPointerValue(u.Language)
 }
 
 func (m *orgUserModel) customerIDs(ctx context.Context) []int64 {
@@ -110,9 +106,9 @@ func (r *orgUserResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"language": schema.StringAttribute{Optional: true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 				Validators:    []validator.String{stringvalidator.OneOf(UserLanguages...)},
-				Description: "Language of the login (dashboard, mails); null = organization language. Only sent on create: the API " +
-					"cannot change it later, the person changes it in their profile. Set, the configured value stays in state " +
-					"as written (no drift detection, a later change is not sent); unset, it is read from the API."},
+				Description: "Language of the login (dashboard, mails, SMS): `de`, `en` or `da`; null = organization language. " +
+					"Always read from the API, so a language the person picks in their profile shows as drift. A change is " +
+					"sent in place (PATCH); removing it from the configuration keeps the current language."},
 			"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keep},
 		},
 	}
@@ -207,6 +203,9 @@ func (r *orgUserResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	if !plan.IsActive.Equal(state.IsActive) {
 		patch["isActive"] = plan.IsActive.ValueBool()
+	}
+	if !plan.Language.IsNull() && !plan.Language.IsUnknown() && !plan.Language.Equal(state.Language) {
+		patch["language"] = plan.Language.ValueString()
 	}
 	if !plan.CustomerIDs.Equal(state.CustomerIDs) && plan.Role.ValueString() == "readonly" {
 		patch["customerIds"] = append([]int64{}, plan.customerIDs(ctx)...)

@@ -125,7 +125,7 @@ func (c *Client) ResetStatusPageDesign(ctx context.Context, pageID string) error
 
 type StatusPageDomain struct {
 	ID                int64   `json:"id"`
-	StatusPageID      *int64  `json:"statusPageId"` // GET only; null while unbound
+	StatusPageID      *int64  `json:"statusPageId"` // null while unbound
 	Hostname          string  `json:"hostname"`
 	Status            string  `json:"status"`
 	VerificationToken *string `json:"verificationToken"`

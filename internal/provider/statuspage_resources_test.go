@@ -76,6 +76,41 @@ func TestStatusPageDomainImportAndReadPageID(t *testing.T) {
 	}
 }
 
+// Unit: create takes status_page_id from the POST answer (domain.statusPageId), not from the plan.
+func TestStatusPageDomainCreateReadsPageID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/status-pages/domains" {
+			t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"domain":{"id":7,"statusPageId":43,"hostname":"status.example.com","status":"pending",
+			"verifiedAt":null,"createdAt":"c","updatedAt":"u"},"dns":{"txtName":"_uptimeify.status.example.com","txtValue":"tok"}}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &statusPageDomainResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	if d := plan.Set(ctx, &statusPageDomainModel{ID: types.StringUnknown(), StatusPageID: types.Int64Value(42),
+		Hostname: types.StringValue("status.example.com"), Status: types.StringUnknown(), VerifiedAt: types.StringUnknown(),
+		VerificationRecord: types.ObjectUnknown(verificationRecordAttrTypes), CreatedAt: types.StringUnknown()}); d.HasError() {
+		t.Fatal(d)
+	}
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	var got statusPageDomainModel
+	resp.State.Get(ctx, &got)
+	if got.ID.ValueString() != "7" || got.StatusPageID.ValueInt64() != 43 {
+		t.Fatalf("state %+v", got)
+	}
+}
+
 // Unit: activation runs verify then activate; a failed verify names the TXT record and stores nothing.
 func TestStatusPageDomainActivationCreate(t *testing.T) {
 	verifyOK := false

@@ -147,9 +147,13 @@ func (c *Client) ListIMTiers(ctx context.Context, teamID int64) ([]IMTier, error
 
 // CreateIMTier appends a tier, or inserts it at tierOrder (1 to highest + 1, else 422 imInvalidNumber;
 // tiers at or after it move down). The API also creates a default schedule ("Tier N schedule") with
-// one rotation of memberUserIds; it comes back in Schedules[0].
-func (c *Client) CreateIMTier(ctx context.Context, teamID int64, memberUserIDs []string, tierOrder *int64) (*IMTier, error) {
+// one rotation of memberUserIds; it comes back in Schedules[0]. settings takes the PATCH .../tiers/{tierId}
+// fields (autoEscalation*, repeats*); absent ones get the column defaults.
+func (c *Client) CreateIMTier(ctx context.Context, teamID int64, memberUserIDs []string, tierOrder *int64, settings map[string]any) (*IMTier, error) {
 	body := map[string]any{"memberUserIds": memberUserIDs}
+	for k, v := range settings {
+		body[k] = v
+	}
 	if tierOrder != nil {
 		body["tierOrder"] = *tierOrder
 	}

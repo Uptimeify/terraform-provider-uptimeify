@@ -50,6 +50,7 @@ type statusPageDomainModel struct {
 
 func (m *statusPageDomainModel) fromAPI(d *client.StatusPageDomain, dns *client.DomainDNS) {
 	m.ID = types.StringValue(strconv.FormatInt(d.ID, 10))
+	m.StatusPageID = types.Int64PointerValue(d.StatusPageID)
 	m.Hostname = types.StringValue(d.Hostname)
 	m.Status = types.StringValue(d.Status)
 	m.VerifiedAt = types.StringPointerValue(d.VerifiedAt)
@@ -136,7 +137,6 @@ func (r *statusPageDomainResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 	state.fromAPI(d, dns)
-	state.StatusPageID = types.Int64PointerValue(d.StatusPageID) // only the GET names the page
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
