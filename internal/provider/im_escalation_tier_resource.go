@@ -143,9 +143,9 @@ func (r *imTierResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()}},
 			"tier_id": schema.Int64Attribute{Computed: true, Description: "Numeric tier id.", PlanModifiers: keepInt},
 			"tier_order": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepInt,
-				Description: "Position in the team's ladder, 1 = paged first. Unset = appended at the end. Setting it reorders the team's tiers " +
-					"(POST .../tiers/reorder), which moves the other tiers too: when you set it, set it on every tier of the team, as 1..n. " +
-					"A value larger than the number of tiers ends up as the last position.",
+				Description: "Position in the team's ladder, 1 = paged first. Unset = appended at the end. On create the tier is inserted there " +
+					"(tiers at or after it move down by one); a later change reorders the team's tiers (POST .../tiers/reorder). Both move the " +
+					"other tiers too: when you set it, set it on every tier of the team, as 1..n. A value larger than the number of tiers ends up as the last position.",
 				Validators: []validator.Int64{int64validator.AtLeast(1)}},
 			"member_user_ids": schema.ListAttribute{ElementType: types.StringType, Required: true,
 				Description: "Team members on the default schedule's rotation, in order (1 to 200 user ids). Changing it replaces all rotation groups of the default schedule.",
@@ -211,13 +211,26 @@ func (r *imTierResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	teamID := plan.TeamID.ValueInt64()
 
+	var tierOrder *int64
+	if !plan.TierOrder.IsUnknown() && !plan.TierOrder.IsNull() {
+		tierOrder = plan.TierOrder.ValueInt64Pointer()
+	}
 	// Two tiers created at once race for the next tierOrder; the API answers 409 imTierOrderConflict.
+	// A tierOrder past the end (422 imInvalidNumber, e.g. tier 3 created before tier 2) is appended:
+	// the last position, as documented.
 	var tier *client.IMTier
 	var err error
 	for attempt := 0; attempt < 4; attempt++ {
-		tier, err = r.client.CreateIMTier(ctx, teamID, plan.memberIDs())
+		tier, err = r.client.CreateIMTier(ctx, teamID, plan.memberIDs(), tierOrder)
 		var apiErr *client.APIError
-		if !errors.As(err, &apiErr) || apiErr.Code != "imTierOrderConflict" {
+		if !errors.As(err, &apiErr) {
+			break
+		}
+		if apiErr.Code == "imInvalidNumber" && tierOrder != nil {
+			tierOrder = nil
+			continue
+		}
+		if apiErr.Code != "imTierOrderConflict" {
 			break
 		}
 		time.Sleep(time.Duration(attempt+1) * 300 * time.Millisecond)
@@ -233,12 +246,6 @@ func (r *imTierResource) Create(ctx context.Context, req resource.CreateRequest,
 	if p := imTierPatch(ctx, &plan, &cur); len(p) > 0 {
 		if err := r.client.UpdateIMTier(ctx, teamID, tier.ID, p); err != nil {
 			resp.Diagnostics.AddError("Configuring escalation tier failed", err.Error())
-			return
-		}
-	}
-	if !plan.TierOrder.IsUnknown() && !plan.TierOrder.Equal(cur.TierOrder) {
-		if err := r.moveTier(ctx, teamID, tier.ID, plan.TierOrder.ValueInt64()); err != nil {
-			resp.Diagnostics.AddError("Reordering escalation tiers failed", err.Error())
 			return
 		}
 	}

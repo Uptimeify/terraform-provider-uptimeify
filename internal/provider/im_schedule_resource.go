@@ -68,8 +68,8 @@ func keepSameInstantPtr(prior types.String, api *string) types.String {
 	return keepSameInstant(prior, *api)
 }
 
-// fromAPI fills m from GET /api/im/schedules/{id} plus the rotations from the tier tree.
-func (m *imScheduleModel) fromAPI(s *client.IMSchedule, rotations []client.IMRotation) {
+// fromAPI fills m from GET /api/im/schedules/{id}.
+func (m *imScheduleModel) fromAPI(s *client.IMSchedule) {
 	m.ID = types.StringValue(strconv.FormatInt(s.ID, 10))
 	m.TierID = types.Int64Value(s.TierID)
 	m.TeamID = types.Int64Value(s.TeamID)
@@ -88,7 +88,7 @@ func (m *imScheduleModel) fromAPI(s *client.IMSchedule, rotations []client.IMRot
 	m.StartsOnDateOfMonth = types.Int64PointerValue(s.StartsOnDateOfMonth)
 	m.StartsOnTime = types.StringPointerValue(s.StartsOnTime)
 	m.Rotations = []rotationModel{}
-	for _, r := range rotations { // ordered by rotationOrder, members by memberOrder
+	for _, r := range s.Rotations { // ordered by rotationOrder, members by memberOrder
 		rm := rotationModel{Members: []types.String{}}
 		for _, mem := range r.Members {
 			rm.Members = append(rm.Members, types.StringValue(mem.UserID))
@@ -222,24 +222,13 @@ func (r *imScheduleResource) Configure(_ context.Context, req resource.Configure
 	}
 }
 
-// readInto loads the schedule and its rotations; notFound reports a schedule (or tier) that is gone.
+// readInto loads the schedule incl. rotations; notFound reports a schedule that is gone.
 func (r *imScheduleResource) readInto(ctx context.Context, id int64, m *imScheduleModel) (notFound bool, err error) {
 	s, err := r.client.GetIMSchedule(ctx, id)
 	if err != nil {
 		return client.IsNotFound(err), err
 	}
-	// GET /api/im/schedules/{id} has no rotations; the tier tree has.
-	tier, err := r.client.GetIMTier(ctx, s.TeamID, s.TierID)
-	if err != nil {
-		return client.IsNotFound(err), err
-	}
-	var rotations []client.IMRotation
-	for _, ts := range tier.Schedules {
-		if ts.ID == s.ID {
-			rotations = ts.Rotations
-		}
-	}
-	m.fromAPI(s, rotations)
+	m.fromAPI(s)
 	return false, nil
 }
 

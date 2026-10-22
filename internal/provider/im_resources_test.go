@@ -88,6 +88,133 @@ func TestIMScheduleOverrideReadNotFound(t *testing.T) {
 	}
 }
 
+// Unit: the schedule's rotations come from GET /api/im/schedules/{id} itself, no tier read.
+func TestIMScheduleReadsRotationsFromScheduleGet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/im/schedules/5" {
+			t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":5,"teamId":7,"tierId":21,"name":"s","timezone":"UTC","weeklySchedules":[],"rotationMode":"none","roundRobinSize":1,
+			"rotations":[{"id":1,"rotationOrder":1,"members":[{"userId":"a","memberOrder":0},{"userId":"b","memberOrder":1}]},
+			{"id":2,"rotationOrder":2,"members":[{"userId":"c","memberOrder":0}]}]}`))
+	}))
+	defer srv.Close()
+	r := &imScheduleResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var m imScheduleModel
+	if _, err := r.readInto(context.Background(), 5, &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Rotations) != 2 || len(m.Rotations[0].Members) != 2 || m.Rotations[0].Members[1].ValueString() != "b" || m.Rotations[1].Members[0].ValueString() != "c" {
+		t.Fatalf("rotations = %+v", m.Rotations)
+	}
+}
+
+// Unit: create sends the team settings in the POST body (no follow-up PATCH).
+func TestIMTeamCreateBodyIsFull(t *testing.T) {
+	plan := imTeamModel{Name: types.StringValue("t"), LabelColor: types.StringNull(), AnalyticsEnabled: types.BoolValue(false),
+		Timezone: types.StringValue("Europe/Berlin"), EscalationRepeats: types.Int64Value(2), EscalationRepeatsAfterMinutes: types.Int64Value(10),
+		EscalationRepeatsStopMode: types.StringValue("resolved"), EngagementReportEnabled: types.BoolValue(true),
+		EngagementReportDayOfWeek: types.Int64Value(1), EngagementReportTime: types.StringValue("09:00")}
+	got := imTeamPatch(&plan, nil)
+	for _, k := range []string{"name", "labelColor", "analyticsEnabled", "timezone", "escalationRepeats", "escalationRepeatsAfterMinutes",
+		"escalationRepeatsStopMode", "engagementReportEnabled", "engagementReportDayOfWeek", "engagementReportTime"} {
+		if _, ok := got[k]; !ok {
+			t.Errorf("create body misses %s", k)
+		}
+	}
+	cur := plan
+	cur.Timezone = types.StringValue("UTC")
+	if p := imTeamPatch(&plan, &cur); len(p) != 1 || p["timezone"] == nil {
+		t.Fatalf("patch = %v, want only timezone", p)
+	}
+}
+
+// Unit: an override PATCH carries only the changed fields; once userId, type, startsAt and endsAt
+// all change it is the full override (the API's full-replace form resets unsent fields).
+func TestIMOverridePatch(t *testing.T) {
+	ctx := context.Background()
+	cur := imOverrideModel{TeamID: types.Int64Value(7), ScheduleID: types.Int64Value(5), UserID: types.StringValue("u"), Type: types.StringValue("offline"),
+		ApplyScope: types.StringValue("this_team"), EscalationTierOrder: types.Int64Value(2), CoveredByUserIDs: stringSetValue([]string{"x", "y"}),
+		StartsAt: types.StringValue("2030-01-01T00:00:00Z"), EndsAt: types.StringValue("2030-01-02T00:00:00Z")}
+	plan := cur
+	plan.EndsAt = types.StringValue("2030-01-03T00:00:00Z")
+	plan.EscalationTierOrder = types.Int64Null()
+	p := plan.patch(ctx, true, &cur)
+	if len(p) != 2 || p["endsAt"] != "2030-01-03T00:00:00Z" || p["escalationTierOrder"].(*int64) != nil {
+		t.Fatalf("partial patch = %v", p)
+	}
+	if _, ok := p["escalationTierOrder"]; !ok {
+		t.Fatal("cleared escalationTierOrder must go out as null")
+	}
+	if p := cur.patch(ctx, true, &cur); len(p) != 0 {
+		t.Fatalf("unchanged override patch = %v", p)
+	}
+	plan = cur
+	plan.UserID, plan.Type = types.StringValue("v"), types.StringValue("online")
+	plan.CoveredByUserIDs = stringSetValue(nil)
+	plan.StartsAt, plan.EndsAt = types.StringValue("2031-01-01T00:00:00Z"), types.StringValue("2031-01-02T00:00:00Z")
+	if p := plan.patch(ctx, true, &cur); len(p) != 8 || p["applyScope"] != "this_team" || p["scheduleId"].(*int64) == nil {
+		t.Fatalf("full-replace patch = %v", p)
+	}
+}
+
+// Unit: create sends tier_order in the POST; a position past the end (422 imInvalidNumber) is
+// appended instead, without a reorder call.
+func TestIMTierCreateTierOrder(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/im/teams/7/tiers":
+			var in map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			bodies = append(bodies, in)
+			if _, ok := in["tierOrder"]; ok {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(`{"statusCode":422,"statusMessage":"tierOrder must be between 1 and 1","data":{"code":"imInvalidNumber"}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":21,"tierOrder":1,"autoEscalationEnabled":true,"autoEscalationAfterMinutes":5,"autoEscalationStopMode":"acknowledged",
+				"autoEscalationTimeFilters":[],"repeats":0,"repeatsStopMode":"acknowledged","schedules":[{"id":31}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/im/teams/7/tiers/21":
+			_, _ = w.Write([]byte(`{"id":21,"tierOrder":1,"autoEscalationEnabled":true,"autoEscalationAfterMinutes":5,"autoEscalationStopMode":"acknowledged",
+				"autoEscalationTimeFilters":[],"repeats":0,"repeatsStopMode":"acknowledged",
+				"schedules":[{"id":31,"rotations":[{"id":1,"rotationOrder":1,"members":[{"userId":"u","memberOrder":0}]}]}]}`))
+		default:
+			t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &imTierResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	if d := plan.Set(ctx, &imTierModel{ID: types.StringUnknown(), TeamID: types.Int64Value(7), TierID: types.Int64Unknown(), TierOrder: types.Int64Value(3),
+		MemberUserIDs: []types.String{types.StringValue("u")}, DefaultScheduleID: types.Int64Unknown(), AutoEscalationEnabled: types.BoolValue(true),
+		AutoEscalationAfterMinutes: types.Int64Value(5), AutoEscalationStopMode: types.StringValue("acknowledged"), AutoEscalationSeverities: types.SetNull(types.StringType),
+		AutoEscalationTimeFilters: []weeklyWindowModel{}, Repeats: types.Int64Value(0), RepeatsAfterMinutes: types.Int64Null(),
+		RepeatsStopMode: types.StringValue("acknowledged")}); d.HasError() {
+		t.Fatal(d)
+	}
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if len(bodies) != 2 || bodies[0]["tierOrder"] != float64(3) {
+		t.Fatalf("POST bodies = %v, want tierOrder 3 then append", bodies)
+	}
+	var got imTierModel
+	resp.State.Get(ctx, &got)
+	if got.TierOrder.ValueInt64() != 1 || got.DefaultScheduleID.ValueInt64() != 31 {
+		t.Fatalf("state tier_order %v default_schedule_id %v", got.TierOrder, got.DefaultScheduleID)
+	}
+}
+
 // accIMUser activates Incident Management for the token's organization (idempotent) and returns
 // the email of a login IM accepts as team member (active admin, editor or responder).
 func accIMUser(t *testing.T) string {

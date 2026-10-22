@@ -284,6 +284,9 @@ func (r *imAlertSourceResource) Create(ctx context.Context, req resource.CreateR
 	if !plan.GroupingWindowMinutes.IsNull() {
 		body["groupingWindowMinutes"] = plan.GroupingWindowMinutes.ValueInt64()
 	}
+	if plan.MaintenanceWindows != nil {
+		body["maintenance"] = maintenanceToAPI(plan.MaintenanceWindows)
+	}
 	src, err := r.client.CreateAlertSource(ctx, body)
 	if err != nil {
 		resp.Diagnostics.AddError("Creating alert source failed", err.Error())
@@ -296,14 +299,7 @@ func (r *imAlertSourceResource) Create(ctx context.Context, req resource.CreateR
 	got.IngestURL = r.ingestURL(src.Type, src.IngestToken)
 	got.BearerToken = types.StringNull()
 
-	if plan.MaintenanceWindows != nil {
-		if src, err = r.client.UpdateAlertSource(ctx, id, map[string]any{"maintenance": maintenanceToAPI(plan.MaintenanceWindows)}); err != nil {
-			resp.Diagnostics.AddError("Setting alert source maintenance failed", err.Error())
-		}
-	}
-	if !resp.Diagnostics.HasError() {
-		r.converge(ctx, id, &plan, nil, &cfg, src, &got, &resp.Diagnostics)
-	}
+	r.converge(ctx, id, &plan, nil, &cfg, src, &got, &resp.Diagnostics)
 	// Stored even after an error, so the created source is tracked (tainted) and not orphaned.
 	got.ID = types.StringValue(id)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &got)...)
