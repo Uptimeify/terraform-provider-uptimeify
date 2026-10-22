@@ -99,7 +99,7 @@ func TestOrgUserUpdateSendsChangedFieldsOnly(t *testing.T) {
 	}
 }
 
-// Unit: language is read back; null means the organization language.
+// Unit: an unset language is read back (null = organization language); a configured one stays.
 func TestOrgUserFromAPILanguage(t *testing.T) {
 	en := "en"
 	var m orgUserModel
@@ -107,9 +107,15 @@ func TestOrgUserFromAPILanguage(t *testing.T) {
 	if m.Language.ValueString() != "en" {
 		t.Fatalf("language %s", m.Language)
 	}
-	m.fromAPI(&client.UserDetail{ID: "u1"})
-	if !m.Language.IsNull() {
-		t.Fatalf("language %s, want null", m.Language)
+	da := "da"
+	m.fromAPI(&client.UserDetail{ID: "u1", Language: &da})
+	if m.Language.ValueString() != "en" {
+		t.Fatalf("configured language must stay as written, got %s", m.Language)
+	}
+	var unset orgUserModel
+	unset.fromAPI(&client.UserDetail{ID: "u1"})
+	if !unset.Language.IsNull() {
+		t.Fatalf("language %s, want null", unset.Language)
 	}
 }
 
