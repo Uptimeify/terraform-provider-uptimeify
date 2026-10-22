@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"reflect"
 	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -98,7 +99,7 @@ func (m *imOverrideModel) fromAPI(team bool, o *client.IMOverride) {
 	m.CreatedAt = types.StringValue(o.CreatedAt)
 }
 
-// body is the full override: the PATCH endpoints take the whole object too.
+// body is the full override (POST, and the PATCH full-replace form).
 func (m *imOverrideModel) body(ctx context.Context, team bool) map[string]any {
 	covered := setStrings(ctx, m.CoveredByUserIDs)
 	sort.Strings(covered)
@@ -118,6 +119,25 @@ func (m *imOverrideModel) body(ctx context.Context, team bool) map[string]any {
 		b["scheduleId"] = m.ScheduleID.ValueInt64Pointer()
 	}
 	return b
+}
+
+// patch holds only the fields where m differs from cur (PATCH is a partial update, mergeOverridePatch).
+// Once userId, type, startsAt and endsAt all differ the API reads the body as a full replace, where
+// unsent optional fields fall back to their defaults; then the whole override goes out.
+func (m *imOverrideModel) patch(ctx context.Context, team bool, cur *imOverrideModel) map[string]any {
+	full, old := m.body(ctx, team), cur.body(ctx, team)
+	p := map[string]any{}
+	for k, v := range full {
+		if !reflect.DeepEqual(v, old[k]) {
+			p[k] = v
+		}
+	}
+	for _, k := range []string{"userId", "type", "startsAt", "endsAt"} {
+		if _, ok := p[k]; !ok {
+			return p
+		}
+	}
+	return full
 }
 
 func (r *imOverrideResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -252,9 +272,11 @@ func (r *imOverrideResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	id := state.OverrideID.ValueInt64()
-	if err := r.client.UpdateIMOverride(ctx, r.parentPath(&state), id, plan.body(ctx, r.isTeam())); err != nil {
-		resp.Diagnostics.AddError("Updating override failed", err.Error())
-		return
+	if p := plan.patch(ctx, r.isTeam(), &state); len(p) > 0 {
+		if err := r.client.UpdateIMOverride(ctx, r.parentPath(&state), id, p); err != nil {
+			resp.Diagnostics.AddError("Updating override failed", err.Error())
+			return
+		}
 	}
 	o, err := r.client.GetIMOverride(ctx, r.parentPath(&state), id)
 	if err != nil {

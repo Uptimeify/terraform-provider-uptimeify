@@ -280,7 +280,7 @@ func (r *imOutboundResource) Create(ctx context.Context, req resource.CreateRequ
 		config[k] = v
 	}
 	body := map[string]any{"name": plan.Name.ValueString(), "type": plan.Type.ValueString(), "config": config,
-		"filters": outboundFilters(ctx, &plan.imOutboundModel, types.ListNull(types.StringType))}
+		"filters": outboundFilters(ctx, &plan.imOutboundModel, types.ListNull(types.StringType)), "isActive": plan.IsActive.ValueBool()}
 	if !plan.TeamID.IsNull() {
 		body["teamId"] = plan.TeamID.ValueInt64()
 	}
@@ -288,13 +288,6 @@ func (r *imOutboundResource) Create(ctx context.Context, req resource.CreateRequ
 	if err != nil {
 		resp.Diagnostics.AddError("Creating outbound integration failed", err.Error())
 		return
-	}
-	if !plan.IsActive.ValueBool() { // POST has no isActive
-		if o2, err := r.client.UpdateImOutbound(ctx, strconv.FormatInt(o.ID, 10), map[string]any{"isActive": false}); err != nil {
-			resp.Diagnostics.AddError("Deactivating outbound integration failed", err.Error())
-		} else {
-			o = o2
-		}
 	}
 	plan.fromAPI(o)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

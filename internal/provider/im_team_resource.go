@@ -64,37 +64,41 @@ func (m *imTeamModel) fromAPI(t *client.IMTeam) {
 
 func (m *imTeamModel) numID() int64 { n, _ := strconv.ParseInt(m.ID.ValueString(), 10, 64); return n }
 
-// imTeamPatch holds only the fields where plan differs from cur.
+// imTeamPatch holds the fields where plan differs from cur; with cur = nil it is the full POST body.
 func imTeamPatch(plan, cur *imTeamModel) map[string]any {
 	p := map[string]any{}
-	if !plan.Name.Equal(cur.Name) {
+	full := cur == nil
+	if full {
+		cur = &imTeamModel{}
+	}
+	if full || !plan.Name.Equal(cur.Name) {
 		p["name"] = plan.Name.ValueString()
 	}
-	if !plan.LabelColor.Equal(cur.LabelColor) {
+	if full || !plan.LabelColor.Equal(cur.LabelColor) {
 		p["labelColor"] = plan.LabelColor.ValueStringPointer()
 	}
-	if !plan.AnalyticsEnabled.Equal(cur.AnalyticsEnabled) {
+	if full || !plan.AnalyticsEnabled.Equal(cur.AnalyticsEnabled) {
 		p["analyticsEnabled"] = plan.AnalyticsEnabled.ValueBool()
 	}
-	if !plan.Timezone.Equal(cur.Timezone) {
+	if full || !plan.Timezone.Equal(cur.Timezone) {
 		p["timezone"] = plan.Timezone.ValueStringPointer()
 	}
-	if !plan.EscalationRepeats.Equal(cur.EscalationRepeats) {
+	if full || !plan.EscalationRepeats.Equal(cur.EscalationRepeats) {
 		p["escalationRepeats"] = plan.EscalationRepeats.ValueInt64()
 	}
-	if !plan.EscalationRepeatsAfterMinutes.Equal(cur.EscalationRepeatsAfterMinutes) {
+	if full || !plan.EscalationRepeatsAfterMinutes.Equal(cur.EscalationRepeatsAfterMinutes) {
 		p["escalationRepeatsAfterMinutes"] = plan.EscalationRepeatsAfterMinutes.ValueInt64Pointer()
 	}
-	if !plan.EscalationRepeatsStopMode.Equal(cur.EscalationRepeatsStopMode) {
+	if full || !plan.EscalationRepeatsStopMode.Equal(cur.EscalationRepeatsStopMode) {
 		p["escalationRepeatsStopMode"] = plan.EscalationRepeatsStopMode.ValueString()
 	}
-	if !plan.EngagementReportEnabled.Equal(cur.EngagementReportEnabled) {
+	if full || !plan.EngagementReportEnabled.Equal(cur.EngagementReportEnabled) {
 		p["engagementReportEnabled"] = plan.EngagementReportEnabled.ValueBool()
 	}
-	if !plan.EngagementReportDayOfWeek.Equal(cur.EngagementReportDayOfWeek) {
+	if full || !plan.EngagementReportDayOfWeek.Equal(cur.EngagementReportDayOfWeek) {
 		p["engagementReportDayOfWeek"] = plan.EngagementReportDayOfWeek.ValueInt64Pointer()
 	}
-	if !plan.EngagementReportTime.Equal(cur.EngagementReportTime) {
+	if full || !plan.EngagementReportTime.Equal(cur.EngagementReportTime) {
 		p["engagementReportTime"] = plan.EngagementReportTime.ValueStringPointer()
 	}
 	return p
@@ -147,33 +151,17 @@ func (r *imTeamResource) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	id, err := r.client.CreateIMTeam(ctx, client.IMTeamCreate{
-		Name:             plan.Name.ValueString(),
-		LabelColor:       plan.LabelColor.ValueStringPointer(),
-		AnalyticsEnabled: plan.AnalyticsEnabled.ValueBool(),
-	})
+	// POST takes the settings too (teamCreateBody): one call, no half-configured team.
+	id, err := r.client.CreateIMTeam(ctx, imTeamPatch(&plan, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Creating IM team failed", err.Error())
 		return
 	}
-	// The settings are not part of POST: read the new row, then patch what differs.
-	// A failure from here on leaves the team in state (tainted), not orphaned.
-	var cur imTeamModel
-	if !r.read(ctx, id, &cur, resp.Diagnostics.AddError) {
+	if !r.read(ctx, id, &plan, resp.Diagnostics.AddError) {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strconv.FormatInt(id, 10))...)
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &cur)...)
-	if p := imTeamPatch(&plan, &cur); len(p) > 0 {
-		if err := r.client.UpdateIMTeam(ctx, id, p); err != nil {
-			resp.Diagnostics.AddError("Setting IM team settings failed", err.Error())
-			return
-		}
-		if !r.read(ctx, id, &cur, resp.Diagnostics.AddError) {
-			return
-		}
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &cur)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *imTeamResource) read(ctx context.Context, id int64, m *imTeamModel, addError func(string, string)) bool {

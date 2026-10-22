@@ -33,12 +33,6 @@ type IMTeamListItem struct {
 	Name string `json:"name"`
 }
 
-type IMTeamCreate struct {
-	Name             string  `json:"name"`
-	LabelColor       *string `json:"labelColor,omitempty"`
-	AnalyticsEnabled bool    `json:"analyticsEnabled"`
-}
-
 func imPath(format string, ids ...any) string { return "/api/im/" + fmt.Sprintf(format, ids...) }
 
 func (c *Client) ListIMTeams(ctx context.Context) ([]IMTeamListItem, error) {
@@ -51,9 +45,8 @@ func (c *Client) GetIMTeam(ctx context.Context, id int64) (*IMTeam, error) {
 	return &t, c.Do(ctx, http.MethodGet, imPath("teams/%d", id), nil, &t)
 }
 
-// CreateIMTeam returns the new id; POST takes name, labelColor and analyticsEnabled only, the
-// settings go through UpdateIMTeam.
-func (c *Client) CreateIMTeam(ctx context.Context, in IMTeamCreate) (int64, error) {
+// CreateIMTeam returns the new id; POST takes the PATCH fields (settings included), name required.
+func (c *Client) CreateIMTeam(ctx context.Context, in map[string]any) (int64, error) {
 	var out struct {
 		ID int64 `json:"id"`
 	}
@@ -152,11 +145,16 @@ func (c *Client) ListIMTiers(ctx context.Context, teamID int64) ([]IMTier, error
 	return out.Tiers, c.Do(ctx, http.MethodGet, imPath("teams/%d/escalations", teamID), nil, &out)
 }
 
-// CreateIMTier appends a tier. The API also creates a default schedule ("Tier N schedule") with
+// CreateIMTier appends a tier, or inserts it at tierOrder (1 to highest + 1, else 422 imInvalidNumber;
+// tiers at or after it move down). The API also creates a default schedule ("Tier N schedule") with
 // one rotation of memberUserIds; it comes back in Schedules[0].
-func (c *Client) CreateIMTier(ctx context.Context, teamID int64, memberUserIDs []string) (*IMTier, error) {
+func (c *Client) CreateIMTier(ctx context.Context, teamID int64, memberUserIDs []string, tierOrder *int64) (*IMTier, error) {
+	body := map[string]any{"memberUserIds": memberUserIDs}
+	if tierOrder != nil {
+		body["tierOrder"] = *tierOrder
+	}
 	var t IMTier
-	return &t, c.Do(ctx, http.MethodPost, imPath("teams/%d/tiers", teamID), map[string]any{"memberUserIds": memberUserIDs}, &t)
+	return &t, c.Do(ctx, http.MethodPost, imPath("teams/%d/tiers", teamID), body, &t)
 }
 
 func (c *Client) UpdateIMTier(ctx context.Context, teamID, tierID int64, patch map[string]any) error {
@@ -172,7 +170,7 @@ func (c *Client) DeleteIMTier(ctx context.Context, teamID, tierID int64) error {
 	return c.Do(ctx, http.MethodDelete, imPath("teams/%d/tiers/%d", teamID, tierID), nil, nil)
 }
 
-// IMSchedule is GET /api/im/schedules/{id} (no rotations: those are in the tier tree).
+// IMSchedule is GET /api/im/schedules/{id}; Rotations ordered by rotationOrder, members by memberOrder.
 type IMSchedule struct {
 	ID                  int64          `json:"id"`
 	TeamID              int64          `json:"teamId"`
@@ -191,6 +189,7 @@ type IMSchedule struct {
 	StartsOnDayOfWeek   *int64         `json:"startsOnDayOfWeek"`
 	StartsOnDateOfMonth *int64         `json:"startsOnDateOfMonth"`
 	StartsOnTime        *string        `json:"startsOnTime"`
+	Rotations           []IMRotation   `json:"rotations"`
 }
 
 func (c *Client) GetIMSchedule(ctx context.Context, id int64) (*IMSchedule, error) {
@@ -246,7 +245,7 @@ func (c *Client) CreateIMOverride(ctx context.Context, parent string, body map[s
 	return out.ID, c.Do(ctx, http.MethodPost, imPath("%s/overrides", parent), body, &out)
 }
 
-// UpdateIMOverride: the PATCH body is the full override (userId, type, startsAt, endsAt required).
+// UpdateIMOverride: partial update; a body with all of userId, type, startsAt and endsAt is a full replace.
 func (c *Client) UpdateIMOverride(ctx context.Context, parent string, id int64, body map[string]any) error {
 	return c.Do(ctx, http.MethodPatch, imPath("%s/overrides/%d", parent, id), body, nil)
 }

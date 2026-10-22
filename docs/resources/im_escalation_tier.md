@@ -51,7 +51,7 @@ resource "uptimeify_im_escalation_tier" "second" {
 - `repeats` (Number) Extra pages on this tier before moving on. Default `0`.
 - `repeats_after_minutes` (Number) Minutes between repeats; unset = `auto_escalation_after_minutes`.
 - `repeats_stop_mode` (String) `acknowledged` or `resolved`. Default `acknowledged`.
-- `tier_order` (Number) Position in the team's ladder, 1 = paged first. Unset = appended at the end. Setting it reorders the team's tiers (POST .../tiers/reorder), which moves the other tiers too: when you set it, set it on every tier of the team, as 1..n. A value larger than the number of tiers ends up as the last position.
+- `tier_order` (Number) Position in the team's ladder, 1 = paged first. Unset = appended at the end. On create the tier is inserted there (tiers at or after it move down by one); a later change reorders the team's tiers (POST .../tiers/reorder). Both move the other tiers too: when you set it, set it on every tier of the team, as 1..n. A value larger than the number of tiers ends up as the last position.
 
 ### Read-Only
 
