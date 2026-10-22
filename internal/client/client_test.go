@@ -103,3 +103,26 @@ func TestNoRetryOf503ForPost(t *testing.T) {
 		t.Fatalf("GET 503 calls=%d", calls)
 	}
 }
+
+// The list lookups use the envelope form ({ items, ... }).
+func TestListsUseEnvelope(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.RequestURI() {
+		case "/api/users?envelope=items":
+			_, _ = w.Write([]byte(`{"items":[{"id":"u1","email":"a@example.test","name":null,"role":"admin","isActive":true,"language":"da"}],"total":1,"page":1,"perPage":1}`))
+		case "/api/customers?envelope=items&fields=minimal":
+			_, _ = w.Write([]byte(`{"items":[{"id":3,"publicId":"c-3","name":"Acme","status":"active"}],"total":1,"page":1,"perPage":0}`))
+		default:
+			t.Errorf("unexpected request %s", r.URL.RequestURI())
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	users, err := c.ListUsers(context.Background())
+	if err != nil || len(users) != 1 || users[0].Language == nil || *users[0].Language != "da" {
+		t.Fatalf("users %+v, %v", users, err)
+	}
+	customers, err := c.ListCustomers(context.Background())
+	if err != nil || len(customers) != 1 || customers[0].ID != 3 {
+		t.Fatalf("customers %+v, %v", customers, err)
+	}
+}

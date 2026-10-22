@@ -20,9 +20,9 @@ func (c *Client) GetCustomer(ctx context.Context, id string) (*Customer, error) 
 	return &cu, c.Do(ctx, http.MethodGet, "/api/customers/"+url.PathEscape(id), nil, &cu)
 }
 
-// ListCustomers reads every customer in scope. GET /api/customers has no envelope form; without
-// `page` and with fields=minimal it answers a bare array sorted by name.
+// ListCustomers reads every customer in scope: with fields=minimal the envelope form is one page
+// with every customer, sorted by name.
 func (c *Client) ListCustomers(ctx context.Context) ([]Customer, error) {
-	var cs []Customer
-	return cs, c.Do(ctx, http.MethodGet, "/api/customers?fields=minimal", nil, &cs)
+	var env itemsEnvelope[Customer]
+	return env.Items, c.Do(ctx, http.MethodGet, "/api/customers?envelope=items&fields=minimal", nil, &env)
 }

@@ -99,6 +99,20 @@ func TestOrgUserUpdateSendsChangedFieldsOnly(t *testing.T) {
 	}
 }
 
+// Unit: language is read back; null means the organization language.
+func TestOrgUserFromAPILanguage(t *testing.T) {
+	en := "en"
+	var m orgUserModel
+	m.fromAPI(&client.UserDetail{ID: "u1", Language: &en})
+	if m.Language.ValueString() != "en" {
+		t.Fatalf("language %s", m.Language)
+	}
+	m.fromAPI(&client.UserDetail{ID: "u1"})
+	if !m.Language.IsNull() {
+		t.Fatalf("language %s, want null", m.Language)
+	}
+}
+
 // orgAccStart skips without TF_ACC (like tfresource.Test) before the test calls the API itself.
 func orgAccStart(t *testing.T) {
 	t.Helper()
@@ -169,10 +183,9 @@ resource "uptimeify_user" "u" {
 				),
 			},
 			{
-				ResourceName:            "uptimeify_user.u",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"language"},
+				ResourceName:      "uptimeify_user.u",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 			{ // drift: deleted outside Terraform
 				PreConfig: func() {

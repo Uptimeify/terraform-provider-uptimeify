@@ -20,6 +20,7 @@ type userModel struct {
 	Name     types.String `tfsdk:"name"`
 	Role     types.String `tfsdk:"role"`
 	IsActive types.Bool   `tfsdk:"is_active"`
+	Language types.String `tfsdk:"language"`
 }
 
 func NewUserDataSource() datasource.DataSource { return &userDataSource{} }
@@ -37,6 +38,7 @@ func (d *userDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			"name":      schema.StringAttribute{Computed: true},
 			"role":      schema.StringAttribute{Computed: true, Description: "`admin`, `editor`, `readonly` or `responder`. IM accepts admin, editor and responder."},
 			"is_active": schema.BoolAttribute{Computed: true},
+			"language":  schema.StringAttribute{Computed: true, Description: "`de`, `en` or `da`; null = organization language."},
 		},
 	}
 }
@@ -62,5 +64,6 @@ func (d *userDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	cfg.Name = types.StringPointerValue(u.Name)
 	cfg.Role = types.StringValue(u.Role)
 	cfg.IsActive = types.BoolValue(u.IsActive)
+	cfg.Language = types.StringPointerValue(u.Language)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &cfg)...)
 }

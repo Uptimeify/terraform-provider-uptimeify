@@ -68,15 +68,17 @@ func (c *Client) GetMaintenanceWindow(ctx context.Context, id string) (*Maintena
 	return &w, c.Do(ctx, http.MethodGet, "/api/maintenance-windows/"+url.PathEscape(id), nil, &w)
 }
 
-// CreateMaintenanceWindow returns the bare row (no targets/tags); callers read it back with GET.
+// CreateMaintenanceWindow returns the written window with targets and tags, like the GET.
 func (c *Client) CreateMaintenanceWindow(ctx context.Context, in MaintenanceWindowCreate) (*MaintenanceWindow, error) {
 	var w MaintenanceWindow
 	return &w, c.Do(ctx, http.MethodPost, "/api/maintenance-windows", in, &w)
 }
 
-// UpdateMaintenanceWindow sends only the keys in patch. The answer has no targets/tags.
-func (c *Client) UpdateMaintenanceWindow(ctx context.Context, id string, patch map[string]any) error {
-	return c.Do(ctx, http.MethodPatch, "/api/maintenance-windows/"+url.PathEscape(id), patch, nil)
+// UpdateMaintenanceWindow sends only the keys in patch and returns the window with targets and
+// tags, like the GET.
+func (c *Client) UpdateMaintenanceWindow(ctx context.Context, id string, patch map[string]any) (*MaintenanceWindow, error) {
+	var w MaintenanceWindow
+	return &w, c.Do(ctx, http.MethodPatch, "/api/maintenance-windows/"+url.PathEscape(id), patch, &w)
 }
 
 func (c *Client) DeleteMaintenanceWindow(ctx context.Context, id string) error {

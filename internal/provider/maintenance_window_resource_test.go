@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
@@ -30,29 +32,39 @@ func TestKeepSameInstant(t *testing.T) {
 	}
 }
 
+func int64Set(ids ...int64) types.Set {
+	v, _ := types.SetValueFrom(context.Background(), types.Int64Type, ids)
+	return v
+}
+
 func TestMaintenancePatchOnlyChangedAndTargetsWithTags(t *testing.T) {
+	ctx := context.Background()
 	state := maintenanceWindowModel{
 		Name: types.StringValue("a"), Description: types.StringValue("d"),
 		StartTime: types.StringValue("2030-01-01T00:00:00Z"), EndTime: types.StringValue("2030-01-01T01:00:00Z"),
-		Timezone: types.StringValue("UTC"), IsActive: types.BoolValue(true), TagIDs: []int64{1, 2},
+		Timezone: types.StringValue("UTC"), IsActive: types.BoolValue(true), TagIDs: int64Set(1, 2),
+		Targets: types.SetNull(maintenanceTargetType), RecurrencePattern: types.ObjectNull(recurrenceAttrTypes),
 	}
 	plan := state
-	plan.TagIDs = []int64{2, 1}
-	if p := maintenancePatch(&plan, &state); len(p) != 0 {
+	plan.TagIDs = int64Set(2, 1)
+	if p := maintenancePatch(ctx, &plan, &state); len(p) != 0 {
 		t.Fatalf("reordered tags must not patch: %v", p)
 	}
 
 	plan.Description = types.StringNull()
-	plan.TagIDs = []int64{3}
-	plan.RecurrencePattern = &recurrenceModel{Frequency: types.StringValue("weekly"), IntervalCount: types.Int64Value(2), DaysOfWeek: []int64{1}}
-	p := maintenancePatch(&plan, &state)
+	plan.TagIDs = int64Set(3)
+	plan.RecurrencePattern = types.ObjectValueMust(recurrenceAttrTypes, map[string]attr.Value{
+		"frequency": types.StringValue("weekly"), "interval_count": types.Int64Value(2),
+		"days_of_week": types.ListValueMust(types.Int64Type, []attr.Value{types.Int64Value(1)}),
+		"day_of_month": types.Int64Null(), "end_recurrence_date": types.StringNull()})
+	p := maintenancePatch(ctx, &plan, &state)
 	if len(p) != 5 || p["description"].(*string) != nil || p["isRecurring"] != true {
 		t.Fatalf("patch %v", p)
 	}
 	if tg := p["targets"].([]client.MaintenanceTarget); len(tg) != 0 || tg == nil {
 		t.Fatalf("targets must travel with tags as [], got %#v", p["targets"])
 	}
-	if rp := p["recurrencePattern"].(*client.RecurrencePattern); *rp.IntervalCount != 2 || rp.Frequency != "weekly" {
+	if rp := p["recurrencePattern"].(*client.RecurrencePattern); *rp.IntervalCount != 2 || rp.Frequency != "weekly" || len(rp.DaysOfWeek) != 1 {
 		t.Fatalf("recurrence %+v", rp)
 	}
 }
@@ -61,13 +73,69 @@ func TestMaintenanceFromAPICustomerOnlyForWholeCustomerWindow(t *testing.T) {
 	cust := int64(7)
 	var m maintenanceWindowModel
 	m.fromAPI(&client.MaintenanceWindow{ID: 1, CustomerID: &cust, Tags: []client.Tag{{ID: 3}}}, &maintenanceWindowModel{})
-	if !m.CustomerID.IsNull() || len(m.TagIDs) != 1 {
+	if !m.CustomerID.IsNull() || len(m.TagIDs.Elements()) != 1 {
 		t.Fatalf("tag window: customer_id %s tags %v", m.CustomerID, m.TagIDs)
 	}
 	m.fromAPI(&client.MaintenanceWindow{ID: 1, CustomerID: &cust, IsRecurring: false,
 		RecurrencePattern: &client.RecurrencePattern{Frequency: "daily"}}, &maintenanceWindowModel{})
-	if m.CustomerID.ValueInt64() != 7 || m.RecurrencePattern != nil || m.Targets != nil {
+	if m.CustomerID.ValueInt64() != 7 || !m.RecurrencePattern.IsNull() || !m.Targets.IsNull() || !m.TagIDs.IsNull() {
 		t.Fatalf("customer window: %+v", m)
+	}
+}
+
+// The PATCH answer carries targets and tags: Update stores them as the API has them (no echo of
+// the plan, no extra GET).
+func TestMaintenanceUpdateReadsTargetsAndTagsFromPatchAnswer(t *testing.T) {
+	var methods []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		_, _ = w.Write([]byte(`{"id":9,"publicId":"p-9","customerId":4,"name":"b","description":null,
+			"startTime":"2030-01-01T00:00:00.000Z","endTime":"2030-01-01T01:00:00.000Z","isRecurring":true,
+			"recurrencePattern":{"frequency":"weekly","interval":2,"intervalCount":2,"daysOfWeek":[1,3]},
+			"isActive":true,"timezone":"UTC","createdAt":"c","updatedAt":"u",
+			"targets":[{"type":"website","id":7,"name":"Shop","publicId":"w-7"},{"type":"dns","id":8}],
+			"tags":[{"id":5,"publicId":"t-5","name":"prod","color":"#000"}]}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &maintenanceWindowResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	base := maintenanceWindowModel{ID: types.StringValue("9"), Name: types.StringValue("a"),
+		StartTime: types.StringValue("2030-01-01T00:00:00Z"), EndTime: types.StringValue("2030-01-01T01:00:00Z"),
+		Timezone: types.StringValue("UTC"), IsActive: types.BoolValue(true), TagIDs: int64Set(1),
+		Targets: types.SetNull(maintenanceTargetType), RecurrencePattern: types.ObjectNull(recurrenceAttrTypes),
+		PublicID: types.StringValue("p-9"), CreatedAt: types.StringValue("c"), UpdatedAt: types.StringValue("u")}
+	state := tfsdk.State{Schema: sch.Schema}
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	changed := base
+	changed.Name = types.StringValue("b")
+	if d := state.Set(ctx, &base); d.HasError() {
+		t.Fatal(d)
+	}
+	if d := plan.Set(ctx, &changed); d.HasError() {
+		t.Fatal(d)
+	}
+	resp := resource.UpdateResponse{State: state}
+	r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if len(methods) != 1 || methods[0] != http.MethodPatch {
+		t.Fatalf("requests %v, want one PATCH", methods)
+	}
+	var got maintenanceWindowModel
+	resp.State.Get(ctx, &got)
+	var ts []maintenanceTargetModel
+	got.Targets.ElementsAs(ctx, &ts, false)
+	var tags []int64
+	got.TagIDs.ElementsAs(ctx, &tags, false)
+	var rp recurrenceModel
+	got.RecurrencePattern.As(ctx, &rp, basetypes.ObjectAsOptions{})
+	if len(ts) != 2 || len(tags) != 1 || tags[0] != 5 || rp.IntervalCount.ValueInt64() != 2 || len(rp.DaysOfWeek.Elements()) != 2 ||
+		got.StartTime.ValueString() != "2030-01-01T00:00:00Z" || !got.CustomerID.IsNull() {
+		t.Fatalf("state %+v targets %v tags %v recurrence %+v", got, ts, tags, rp)
 	}
 }
 
@@ -85,7 +153,8 @@ func TestMaintenanceReadNotFoundRemovesResource(t *testing.T) {
 	state := tfsdk.State{Schema: sch.Schema}
 	if d := state.Set(ctx, &maintenanceWindowModel{ID: types.StringValue("9"), Name: types.StringValue("x"),
 		StartTime: types.StringValue("2030-01-01T00:00:00Z"), EndTime: types.StringValue("2030-01-01T01:00:00Z"),
-		Timezone: types.StringValue("UTC"), IsActive: types.BoolValue(true), TagIDs: []int64{1}}); d.HasError() {
+		Timezone: types.StringValue("UTC"), IsActive: types.BoolValue(true), TagIDs: int64Set(1),
+		Targets: types.SetNull(maintenanceTargetType), RecurrencePattern: types.ObjectNull(recurrenceAttrTypes)}); d.HasError() {
 		t.Fatal(d)
 	}
 	resp := resource.ReadResponse{State: state}

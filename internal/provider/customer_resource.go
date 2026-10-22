@@ -65,12 +65,15 @@ type customerResourceModel struct {
 	UpdatedAt                   types.String `tfsdk:"updated_at"`
 }
 
-// customerOverrides are the permission overrides: written by POST/PATCH, never returned by GET.
-var customerOverrides = []string{"allow_self_service", "max_self_service_urls", "can_edit_managed", "enable_email_alerts",
-	"enable_sms_alerts", "enable_webhook_alerts", "enable_integration_alerts", "enable_post_request_escalation"}
-
-// fromAPI sets everything GET returns. package_type, delete_user_action and the overrides stay as they are.
+// fromAPI sets everything GET returns. delete_user_action stays as it is, and so do the overrides
+// when GET leaves them out (callers that may not write them).
 func (m *customerResourceModel) fromAPI(ctx context.Context, c *client.CustomerDetail) diag.Diagnostics {
+	// package_type keeps the identifier as written (key or display name) while the package stays
+	// the same; after an import or a package change elsewhere it takes the API's key.
+	if m.PackageType.IsNull() || m.PackageType.IsUnknown() ||
+		!m.PackageID.IsUnknown() && !m.PackageID.Equal(types.Int64PointerValue(c.PackageID)) {
+		m.PackageType = types.StringValue(c.PackageType)
+	}
 	m.ID = types.StringValue(strconv.FormatInt(c.ID, 10))
 	m.PublicID = types.StringValue(c.PublicID)
 	m.OrganizationID = types.Int64Value(c.OrganizationID)
@@ -95,6 +98,22 @@ func (m *customerResourceModel) fromAPI(ctx context.Context, c *client.CustomerD
 	} else {
 		m.NotificationTargets, diags = types.MapValueFrom(ctx, types.StringType, c.NotificationTargets)
 	}
+	for _, o := range []struct {
+		dst *types.Bool
+		got client.Opt[bool]
+	}{
+		{&m.AllowSelfService, c.AllowSelfService}, {&m.CanEditManaged, c.CanEditManaged},
+		{&m.EnableEmailAlerts, c.EnableEmailAlerts}, {&m.EnableSmsAlerts, c.EnableSmsAlerts},
+		{&m.EnableWebhookAlerts, c.EnableWebhookAlerts}, {&m.EnableIntegrationAlerts, c.EnableIntegrationAlerts},
+		{&m.EnablePostRequestEscalation, c.EnablePostRequestEscalation},
+	} {
+		if o.got.Set {
+			*o.dst = types.BoolPointerValue(o.got.V)
+		}
+	}
+	if c.MaxSelfServiceURLs.Set {
+		m.MaxSelfServiceURLs = types.Int64PointerValue(c.MaxSelfServiceURLs.V)
+	}
 	m.CreatedAt = types.StringValue(c.CreatedAt)
 	m.UpdatedAt = types.StringValue(c.UpdatedAt)
 	return diags
@@ -117,8 +136,8 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	resp.Schema = schema.Schema{
 		Description: "A customer of the organization. Needs an organization token with write access (customer tokens " +
 			"cannot create customers). Destroying it deletes the customer with its monitors and history. " +
-			"Import with the numeric id or the public id; `package_type`, `delete_user_action` and the permission " +
-			"overrides cannot be read back and stay unset after an import.",
+			"Import with the numeric id or the public id. `delete_user_action` cannot be read back; the permission " +
+			"overrides are read back only with a token that may write them, otherwise they stay unset after an import.",
 		Attributes: map[string]schema.Attribute{
 			"id":              schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Numeric customer id. Use `tonumber(id)` for `customer_id` arguments."},
 			"public_id":       schema.StringAttribute{Computed: true, PlanModifiers: keep},
@@ -132,9 +151,10 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 				Description:   "Package configuration id of the organization. Set this or `package_type`. Changing the package needs organization write access.",
 				Validators:    []validator.Int64{int64validator.AtLeast(1)}},
-			"package_type": schema.StringAttribute{Optional: true,
-				Description: "Package key or display name, resolved to `package_id`. Set this or `package_id`. Not returned by the API.",
-				Validators:  []validator.String{trimmedText, stringvalidator.LengthAtMost(64)}},
+			"package_type": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: keep,
+				Description: "Package key or display name, resolved to `package_id`. Set this or `package_id`. Kept as written " +
+					"while the package stays the same; otherwise (import, unset, package changed elsewhere) the API's package key.",
+				Validators: []validator.String{trimmedText, stringvalidator.LengthAtMost(64)}},
 			"package_display_name": schema.StringAttribute{Computed: true, PlanModifiers: keep},
 			"monthly_reports_enabled": schema.BoolAttribute{Optional: true, Computed: true,
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
@@ -171,8 +191,8 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 	}
 }
 
-const overrideNote = "Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); " +
-	"the API never returns it, so changes made outside Terraform are not detected."
+const overrideNote = "Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the " +
+	"API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected)."
 
 func (r *customerResource) ConfigValidators(context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{resourcevalidator.ExactlyOneOf(path.MatchRoot("package_id"), path.MatchRoot("package_type"))}
@@ -184,7 +204,8 @@ func (r *customerResource) Configure(_ context.Context, req resource.ConfigureRe
 	}
 }
 
-// ModifyPlan: a new package_type resolves to a package_id only the API knows.
+// ModifyPlan: a new package_type resolves to a package_id only the API knows, a new package_id to
+// a package key only the API knows.
 func (r *customerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
 		return
@@ -195,14 +216,24 @@ func (r *customerResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	typeChanged := !plan.PackageType.IsNull() && !plan.PackageType.Equal(state.PackageType)
+	typeChanged := plan.packageTypeChanged(&state)
+	idChanged := !plan.PackageID.IsUnknown() && !plan.PackageID.Equal(state.PackageID)
 	if typeChanged {
 		plan.PackageID = types.Int64Unknown()
 	}
-	if typeChanged || (!plan.PackageID.IsUnknown() && !plan.PackageID.Equal(state.PackageID)) {
+	if idChanged {
+		plan.PackageType = types.StringUnknown()
+	}
+	if typeChanged || idChanged {
 		plan.PackageDisplayName = types.StringUnknown()
 	}
 	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+}
+
+// packageTypeChanged: package_type is configured with a new value (unset, the plan carries the
+// state's value or unknown).
+func (m *customerResourceModel) packageTypeChanged(state *customerResourceModel) bool {
+	return !m.PackageType.IsNull() && !m.PackageType.IsUnknown() && !m.PackageType.Equal(state.PackageType)
 }
 
 // overrideBody adds the overrides: at create the set ones, at update the changed ones (null = inherit).
@@ -238,15 +269,15 @@ func (m *customerResourceModel) overrideBody(body map[string]any, state *custome
 // overridesApplied compares the POST answer with the plan: the API drops overrides silently
 // for callers without organization write access.
 func (m *customerResourceModel) overridesApplied(c *client.CustomerDetail) bool {
-	eq := func(p types.Bool, got *bool) bool {
-		return p.IsNull() && got == nil || got != nil && p.ValueBool() == *got
+	eq := func(p types.Bool, got client.Opt[bool]) bool {
+		return p.IsNull() && got.V == nil || got.V != nil && p.ValueBool() == *got.V
 	}
 	return eq(m.AllowSelfService, c.AllowSelfService) && eq(m.CanEditManaged, c.CanEditManaged) &&
 		eq(m.EnableEmailAlerts, c.EnableEmailAlerts) && eq(m.EnableSmsAlerts, c.EnableSmsAlerts) &&
 		eq(m.EnableWebhookAlerts, c.EnableWebhookAlerts) && eq(m.EnableIntegrationAlerts, c.EnableIntegrationAlerts) &&
 		eq(m.EnablePostRequestEscalation, c.EnablePostRequestEscalation) &&
-		(m.MaxSelfServiceURLs.IsNull() && c.MaxSelfServiceURLs == nil ||
-			c.MaxSelfServiceURLs != nil && m.MaxSelfServiceURLs.ValueInt64() == *c.MaxSelfServiceURLs)
+		(m.MaxSelfServiceURLs.IsNull() && c.MaxSelfServiceURLs.V == nil ||
+			c.MaxSelfServiceURLs.V != nil && m.MaxSelfServiceURLs.ValueInt64() == *c.MaxSelfServiceURLs.V)
 }
 
 func targetsBody(ctx context.Context, m types.Map) (any, diag.Diagnostics) {
@@ -265,7 +296,7 @@ func (r *customerResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	body := map[string]any{"name": plan.Name.ValueString(), "status": plan.Status.ValueString()}
-	if !plan.PackageType.IsNull() {
+	if !plan.PackageType.IsNull() && !plan.PackageType.IsUnknown() {
 		body["packageType"] = plan.PackageType.ValueString()
 	} else {
 		body["packageId"] = plan.PackageID.ValueInt64()
@@ -336,7 +367,7 @@ func (r *customerResource) Read(ctx context.Context, req resource.ReadRequest, r
 	if state.DeleteUserAction.IsNull() { // after import
 		state.DeleteUserAction = types.StringValue("deactivate")
 	}
-	if state.CanEditManaged.IsNull() {
+	if state.CanEditManaged.IsNull() { // after an import without override access
 		state.CanEditManaged = types.BoolValue(false)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -359,7 +390,7 @@ func (r *customerResource) Update(ctx context.Context, req resource.UpdateReques
 	if !plan.Status.Equal(state.Status) {
 		patch["status"] = plan.Status.ValueString()
 	}
-	if !plan.PackageType.IsNull() && !plan.PackageType.Equal(state.PackageType) {
+	if plan.packageTypeChanged(&state) {
 		patch["packageType"] = plan.PackageType.ValueString()
 	} else if !plan.PackageID.IsUnknown() && !plan.PackageID.Equal(state.PackageID) {
 		patch["packageId"] = plan.PackageID.ValueInt64Pointer()

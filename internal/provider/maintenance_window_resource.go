@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/uptimeify/terraform-provider-uptimeify/internal/client"
 )
@@ -44,30 +45,36 @@ type maintenanceTargetModel struct {
 type recurrenceModel struct {
 	Frequency         types.String `tfsdk:"frequency"`
 	IntervalCount     types.Int64  `tfsdk:"interval_count"`
-	DaysOfWeek        []int64      `tfsdk:"days_of_week"`
+	DaysOfWeek        types.List   `tfsdk:"days_of_week"`
 	DayOfMonth        types.Int64  `tfsdk:"day_of_month"`
 	EndRecurrenceDate types.String `tfsdk:"end_recurrence_date"`
 }
 
+var (
+	maintenanceTargetType = types.ObjectType{AttrTypes: map[string]attr.Type{"type": types.StringType, "id": types.Int64Type}}
+	recurrenceAttrTypes   = map[string]attr.Type{"frequency": types.StringType, "interval_count": types.Int64Type,
+		"days_of_week": types.ListType{ElemType: types.Int64Type}, "day_of_month": types.Int64Type, "end_recurrence_date": types.StringType}
+)
+
 // maintenanceWindowModel is shared by the uptimeify_maintenance_window resource and data source.
 type maintenanceWindowModel struct {
-	ID                types.String             `tfsdk:"id"`
-	PublicID          types.String             `tfsdk:"public_id"`
-	Name              types.String             `tfsdk:"name"`
-	Description       types.String             `tfsdk:"description"`
-	StartTime         types.String             `tfsdk:"start_time"`
-	EndTime           types.String             `tfsdk:"end_time"`
-	Timezone          types.String             `tfsdk:"timezone"`
-	IsActive          types.Bool               `tfsdk:"is_active"`
-	CustomerID        types.Int64              `tfsdk:"customer_id"`
-	Targets           []maintenanceTargetModel `tfsdk:"targets"`
-	TagIDs            []int64                  `tfsdk:"tag_ids"`
-	RecurrencePattern *recurrenceModel         `tfsdk:"recurrence_pattern"`
-	CreatedAt         types.String             `tfsdk:"created_at"`
-	UpdatedAt         types.String             `tfsdk:"updated_at"`
+	ID                types.String `tfsdk:"id"`
+	PublicID          types.String `tfsdk:"public_id"`
+	Name              types.String `tfsdk:"name"`
+	Description       types.String `tfsdk:"description"`
+	StartTime         types.String `tfsdk:"start_time"`
+	EndTime           types.String `tfsdk:"end_time"`
+	Timezone          types.String `tfsdk:"timezone"`
+	IsActive          types.Bool   `tfsdk:"is_active"`
+	CustomerID        types.Int64  `tfsdk:"customer_id"`
+	Targets           types.Set    `tfsdk:"targets"`
+	TagIDs            types.Set    `tfsdk:"tag_ids"`
+	RecurrencePattern types.Object `tfsdk:"recurrence_pattern"`
+	CreatedAt         types.String `tfsdk:"created_at"`
+	UpdatedAt         types.String `tfsdk:"updated_at"`
 }
 
-// fromAPI fills m from the GET answer. prior is the plan or state the call started from: a
+// fromAPI fills m from the GET, POST or PATCH answer (all carry targets and tags). prior is the plan or state the call started from: a
 // start/end time written in another RFC3339 spelling of the same instant is kept as written.
 func (m *maintenanceWindowModel) fromAPI(w *client.MaintenanceWindow, prior *maintenanceWindowModel) {
 	m.ID = types.StringValue(strconv.FormatInt(w.ID, 10))
@@ -87,27 +94,42 @@ func (m *maintenanceWindowModel) fromAPI(w *client.MaintenanceWindow, prior *mai
 	if len(w.Targets) == 0 && len(w.Tags) == 0 {
 		m.CustomerID = types.Int64PointerValue(w.CustomerID)
 	}
-	m.Targets = nil
-	for _, t := range w.Targets {
-		m.Targets = append(m.Targets, maintenanceTargetModel{Type: types.StringValue(t.Type), ID: types.Int64Value(t.ID)})
+	// Empty lists are null: both arguments reject an empty set.
+	m.Targets = types.SetNull(maintenanceTargetType)
+	if len(w.Targets) > 0 {
+		ts := make([]attr.Value, 0, len(w.Targets))
+		for _, t := range w.Targets {
+			ts = append(ts, types.ObjectValueMust(maintenanceTargetType.AttrTypes,
+				map[string]attr.Value{"type": types.StringValue(t.Type), "id": types.Int64Value(t.ID)}))
+		}
+		m.Targets = types.SetValueMust(maintenanceTargetType, ts)
 	}
-	m.TagIDs = nil
-	for _, t := range w.Tags {
-		m.TagIDs = append(m.TagIDs, t.ID)
+	m.TagIDs = types.SetNull(types.Int64Type)
+	if len(w.Tags) > 0 {
+		ids := make([]attr.Value, 0, len(w.Tags))
+		for _, t := range w.Tags {
+			ids = append(ids, types.Int64Value(t.ID))
+		}
+		m.TagIDs = types.SetValueMust(types.Int64Type, ids)
 	}
 
-	m.RecurrencePattern = nil
+	m.RecurrencePattern = types.ObjectNull(recurrenceAttrTypes)
 	if p := w.RecurrencePattern; w.IsRecurring && p != nil {
-		r := &recurrenceModel{
-			Frequency:         types.StringValue(p.Frequency),
-			IntervalCount:     types.Int64PointerValue(p.IntervalCount),
-			DayOfMonth:        types.Int64PointerValue(p.DayOfMonth),
-			EndRecurrenceDate: types.StringPointerValue(p.EndRecurrenceDate),
-		}
+		days := types.ListNull(types.Int64Type)
 		if len(p.DaysOfWeek) > 0 {
-			r.DaysOfWeek = p.DaysOfWeek
+			ds := make([]attr.Value, 0, len(p.DaysOfWeek))
+			for _, d := range p.DaysOfWeek {
+				ds = append(ds, types.Int64Value(d))
+			}
+			days = types.ListValueMust(types.Int64Type, ds)
 		}
-		m.RecurrencePattern = r
+		m.RecurrencePattern = types.ObjectValueMust(recurrenceAttrTypes, map[string]attr.Value{
+			"frequency":           types.StringValue(p.Frequency),
+			"interval_count":      types.Int64PointerValue(p.IntervalCount),
+			"days_of_week":        days,
+			"day_of_month":        types.Int64PointerValue(p.DayOfMonth),
+			"end_recurrence_date": types.StringPointerValue(p.EndRecurrenceDate),
+		})
 	}
 }
 
@@ -123,30 +145,36 @@ func keepSameInstant(prior types.String, api string) types.String {
 	return types.StringValue(api)
 }
 
-func (m *maintenanceWindowModel) apiTargets() []client.MaintenanceTarget {
+// apiTargets is never nil: a PATCH sends [] to clear the targets.
+func (m *maintenanceWindowModel) apiTargets(ctx context.Context) []client.MaintenanceTarget {
+	var ts []maintenanceTargetModel
+	m.Targets.ElementsAs(ctx, &ts, false)
 	out := []client.MaintenanceTarget{}
-	for _, t := range m.Targets {
+	for _, t := range ts {
 		out = append(out, client.MaintenanceTarget{Type: t.Type.ValueString(), ID: t.ID.ValueInt64()})
 	}
 	return out
 }
 
-func (m *maintenanceWindowModel) apiTagIDs() []int64 {
-	if m.TagIDs == nil {
-		return []int64{}
-	}
-	return m.TagIDs
+// apiTagIDs is never nil: a PATCH sends [] to clear the tags.
+func (m *maintenanceWindowModel) apiTagIDs(ctx context.Context) []int64 {
+	out := []int64{}
+	m.TagIDs.ElementsAs(ctx, &out, false)
+	return out
 }
 
-func (m *maintenanceWindowModel) apiRecurrence() *client.RecurrencePattern {
-	r := m.RecurrencePattern
-	if r == nil {
+func (m *maintenanceWindowModel) apiRecurrence(ctx context.Context) *client.RecurrencePattern {
+	if m.RecurrencePattern.IsNull() || m.RecurrencePattern.IsUnknown() {
 		return nil
 	}
+	var r recurrenceModel
+	m.RecurrencePattern.As(ctx, &r, basetypes.ObjectAsOptions{})
+	var days []int64
+	r.DaysOfWeek.ElementsAs(ctx, &days, false)
 	return &client.RecurrencePattern{
 		Frequency:         r.Frequency.ValueString(),
 		IntervalCount:     r.IntervalCount.ValueInt64Pointer(),
-		DaysOfWeek:        r.DaysOfWeek,
+		DaysOfWeek:        days,
 		DayOfMonth:        r.DayOfMonth.ValueInt64Pointer(),
 		EndRecurrenceDate: r.EndRecurrenceDate.ValueStringPointer(),
 	}
@@ -268,38 +296,21 @@ func (r *maintenanceWindowResource) Create(ctx context.Context, req resource.Cre
 		Description:       plan.Description.ValueStringPointer(),
 		StartTime:         plan.StartTime.ValueString(),
 		EndTime:           plan.EndTime.ValueString(),
-		IsRecurring:       plan.RecurrencePattern != nil,
-		RecurrencePattern: plan.apiRecurrence(),
+		IsRecurring:       !plan.RecurrencePattern.IsNull(),
+		RecurrencePattern: plan.apiRecurrence(ctx),
 		IsActive:          plan.IsActive.ValueBool(),
 		Timezone:          plan.Timezone.ValueString(),
 		CustomerID:        plan.CustomerID.ValueInt64Pointer(),
-		Targets:           plan.apiTargets(),
-		TagIDs:            plan.TagIDs,
+		Targets:           plan.apiTargets(ctx),
+		TagIDs:            plan.apiTagIDs(ctx),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Creating maintenance window failed", err.Error())
 		return
 	}
-	w, err := r.client.GetMaintenanceWindow(ctx, strconv.FormatInt(created.ID, 10))
-	if err != nil {
-		// Keep the created window in state (tainted) instead of orphaning it.
-		resp.Diagnostics.AddError("Reading maintenance window after create failed", err.Error())
-		w = created
-	}
 	prior := plan
-	plan.fromAPI(w, &prior)
+	plan.fromAPI(created, &prior)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-}
-
-// readInto GETs the window (POST and PATCH answer without targets/tags) and fills m.
-func (r *maintenanceWindowResource) readInto(ctx context.Context, id string, m *maintenanceWindowModel, addError func(string, string)) {
-	w, err := r.client.GetMaintenanceWindow(ctx, id)
-	if err != nil {
-		addError("Reading maintenance window failed", err.Error())
-		return
-	}
-	prior := *m
-	m.fromAPI(w, &prior)
 }
 
 func (r *maintenanceWindowResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -324,7 +335,7 @@ func (r *maintenanceWindowResource) Read(ctx context.Context, req resource.ReadR
 
 // maintenancePatch holds only the changed keys. Targets and tags travel together: the API
 // re-derives the window's customer from both, so sending one alone could re-anchor the window.
-func maintenancePatch(plan, state *maintenanceWindowModel) map[string]any {
+func maintenancePatch(ctx context.Context, plan, state *maintenanceWindowModel) map[string]any {
 	patch := map[string]any{}
 	if !plan.Name.Equal(state.Name) {
 		patch["name"] = plan.Name.ValueString()
@@ -344,22 +355,23 @@ func maintenancePatch(plan, state *maintenanceWindowModel) map[string]any {
 	if !plan.IsActive.Equal(state.IsActive) {
 		patch["isActive"] = plan.IsActive.ValueBool()
 	}
-	if !reflect.DeepEqual(plan.RecurrencePattern, state.RecurrencePattern) {
-		patch["isRecurring"] = plan.RecurrencePattern != nil
-		patch["recurrencePattern"] = plan.apiRecurrence() // nil clears it
+	if !plan.RecurrencePattern.Equal(state.RecurrencePattern) {
+		patch["isRecurring"] = !plan.RecurrencePattern.IsNull()
+		patch["recurrencePattern"] = plan.apiRecurrence(ctx) // nil clears it
 	}
-	if !sameTargets(plan.Targets, state.Targets) || !sameInt64s(plan.TagIDs, state.TagIDs) {
-		patch["targets"] = plan.apiTargets()
-		patch["tagIds"] = plan.apiTagIDs()
+	pt, st := plan.apiTargets(ctx), state.apiTargets(ctx)
+	if !sameTargets(pt, st) || !sameInt64s(plan.apiTagIDs(ctx), state.apiTagIDs(ctx)) {
+		patch["targets"] = pt
+		patch["tagIds"] = plan.apiTagIDs(ctx)
 	}
 	return patch
 }
 
-func sameTargets(a, b []maintenanceTargetModel) bool {
-	key := func(ts []maintenanceTargetModel) []string {
+func sameTargets(a, b []client.MaintenanceTarget) bool {
+	key := func(ts []client.MaintenanceTarget) []string {
 		out := make([]string, 0, len(ts))
 		for _, t := range ts {
-			out = append(out, t.Type.ValueString()+":"+strconv.FormatInt(t.ID.ValueInt64(), 10))
+			out = append(out, t.Type+":"+strconv.FormatInt(t.ID, 10))
 		}
 		slices.Sort(out)
 		return out
@@ -381,16 +393,20 @@ func (r *maintenanceWindowResource) Update(ctx context.Context, req resource.Upd
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if patch := maintenancePatch(&plan, &state); len(patch) > 0 {
-		if err := r.client.UpdateMaintenanceWindow(ctx, state.ID.ValueString(), patch); err != nil {
-			resp.Diagnostics.AddError("Updating maintenance window failed", err.Error())
-			return
-		}
+	var w *client.MaintenanceWindow
+	var err error
+	if patch := maintenancePatch(ctx, &plan, &state); len(patch) > 0 {
+		w, err = r.client.UpdateMaintenanceWindow(ctx, state.ID.ValueString(), patch)
+	} else {
+		w, err = r.client.GetMaintenanceWindow(ctx, state.ID.ValueString())
 	}
-	r.readInto(ctx, state.ID.ValueString(), &plan, resp.Diagnostics.AddError)
-	if !resp.Diagnostics.HasError() {
-		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if err != nil {
+		resp.Diagnostics.AddError("Updating maintenance window failed", err.Error())
+		return
 	}
+	prior := plan
+	plan.fromAPI(w, &prior)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *maintenanceWindowResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

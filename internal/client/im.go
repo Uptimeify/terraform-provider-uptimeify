@@ -262,14 +262,13 @@ type User struct {
 	Name     *string `json:"name"`
 	Role     string  `json:"role"`
 	IsActive bool    `json:"isActive"`
+	Language *string `json:"language"`
 }
 
-// ListUsers reads GET /api/users ({ users, limits }, no envelope form).
+// ListUsers reads GET /api/users?envelope=items (one page with every visible login).
 func (c *Client) ListUsers(ctx context.Context) ([]User, error) {
-	var out struct {
-		Users []User `json:"users"`
-	}
-	return out.Users, c.Do(ctx, http.MethodGet, "/api/users", nil, &out)
+	var env itemsEnvelope[User]
+	return env.Items, c.Do(ctx, http.MethodGet, "/api/users?envelope=items", nil, &env)
 }
 
 // FindUserByEmail matches case-insensitively.

@@ -67,6 +67,7 @@ func (m *orgUserModel) fromAPI(u *client.UserDetail) {
 	}
 	m.CustomerIDs = types.SetValueMust(types.Int64Type, ids)
 	m.CreatedAt = types.StringValue(u.CreatedAt)
+	m.Language = types.StringPointerValue(u.Language)
 }
 
 func (m *orgUserModel) customerIDs(ctx context.Context) []int64 {
@@ -102,9 +103,12 @@ func (r *orgUserResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"customer_ids": schema.SetAttribute{ElementType: types.Int64Type, Optional: true, Computed: true,
 				Default:     setdefault.StaticValue(types.SetValueMust(types.Int64Type, nil)),
 				Description: "Customers a `readonly` login is limited to (customer user). Empty = all customers. Only allowed with `role = \"readonly\"`."},
-			"language": schema.StringAttribute{Optional: true, PlanModifiers: replace,
-				Validators:  []validator.String{stringvalidator.OneOf(UserLanguages...)},
-				Description: "Starting language of the invited login (dashboard, mails). Only sent on create and not readable afterwards; the person changes it in their profile."},
+			"language": schema.StringAttribute{Optional: true, Computed: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
+				Validators:    []validator.String{stringvalidator.OneOf(UserLanguages...)},
+				Description: "Language of the login (dashboard, mails); null = organization language. Only sent on create: the API " +
+					"cannot change it later, the person changes it in their profile. Unset = read from the API only; set, a " +
+					"different value read back (also one the person chose) replaces the login."},
 			"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keep},
 		},
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
@@ -32,6 +33,46 @@ func TestStatusPageDesignPatch(t *testing.T) {
 	state.Layout = types.StringValue("classic")
 	if got := designPatch(&plan, &state); len(got) != 1 || got["layout"] != "cards" {
 		t.Fatalf("update patch: %v", got)
+	}
+}
+
+// Unit: import takes the domain id alone; Read fills status_page_id from the GET.
+func TestStatusPageDomainImportAndReadPageID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/status-pages/domains/7" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"domain":{"id":7,"statusPageId":42,"hostname":"status.example.com","status":"pending",
+			"verifiedAt":null,"createdAt":"c","updatedAt":"u"},"dns":{"txtName":"_uptimeify.status.example.com","txtValue":"tok"}}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &statusPageDomainResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	imp := resource.ImportStateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	imp.State.Raw = tftypes.NewValue(sch.Schema.Type().TerraformType(ctx), nil)
+	r.ImportState(ctx, resource.ImportStateRequest{ID: "7"}, &imp)
+	if imp.Diagnostics.HasError() {
+		t.Fatal(imp.Diagnostics)
+	}
+	resp := resource.ReadResponse{State: imp.State}
+	r.Read(ctx, resource.ReadRequest{State: imp.State}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	var got statusPageDomainModel
+	resp.State.Get(ctx, &got)
+	if got.ID.ValueString() != "7" || got.StatusPageID.ValueInt64() != 42 || got.Hostname.ValueString() != "status.example.com" {
+		t.Fatalf("state %+v", got)
+	}
+
+	bad := resource.ImportStateResponse{State: imp.State}
+	r.ImportState(ctx, resource.ImportStateRequest{ID: "status.example.com"}, &bad)
+	if !bad.Diagnostics.HasError() {
+		t.Fatal("non-numeric import id accepted")
 	}
 }
 
@@ -336,11 +377,10 @@ resource "uptimeify_status_page_domain" "d" {
 					tfresource.TestCheckNoResourceAttr(r, "verified_at"),
 				),
 			},
-			{ // import by status page id
+			{ // import by domain id; status_page_id is read back
 				ResourceName:      r,
 				ImportState:       true,
 				ImportStateVerify: true,
-				ImportStateIdFunc: func(*terraform.State) (string, error) { return pageID, nil },
 			},
 			{ // drift: deleted outside Terraform
 				PreConfig: func() {

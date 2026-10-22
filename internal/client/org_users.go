@@ -26,6 +26,7 @@ type UserDetail struct {
 	IsActive       bool                 `json:"isActive"`
 	CreatedAt      string               `json:"createdAt"`
 	CustomerAccess []UserCustomerAccess `json:"customerAccess"`
+	Language       *string              `json:"language"` // null = organization language
 }
 
 // UserCreate is the POST /api/users body (an invitation; the login sets its own password).

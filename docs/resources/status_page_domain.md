@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   A custom domain of a status page (at most one per page). Creating it registers the hostname as pending; nothing is verified or activated here. To go live:
   Publish the TXT record verification_record.name with the value verification_record.value in your DNS zone, and point the hostname (CNAME) at your Uptimeify status page host.Verify and activate: uptimeify_status_page_domain_activation (runs verify + activate once), or POST /api/status-pages/domains/verify and .../activate with {"domainId": <id>}.
-  status is read from the API: pending, verified or active. Deleting the status page deletes its domain. Import with the numeric status page id.
+  status is read from the API: pending, verified or active. Deleting the status page deletes its domain. Import with the numeric domain id.
 ---
 
 # uptimeify_status_page_domain (Resource)
@@ -15,7 +15,7 @@ A custom domain of a status page (at most one per page). Creating it registers t
 1. Publish the TXT record `verification_record.name` with the value `verification_record.value` in your DNS zone, and point the hostname (CNAME) at your Uptimeify status page host.
 2. Verify and activate: `uptimeify_status_page_domain_activation` (runs verify + activate once), or `POST /api/status-pages/domains/verify` and `.../activate` with `{"domainId": <id>}`.
 
-`status` is read from the API: `pending`, `verified` or `active`. Deleting the status page deletes its domain. Import with the numeric status page id.
+`status` is read from the API: `pending`, `verified` or `active`. Deleting the status page deletes its domain. Import with the numeric domain id.
 
 ## Example Usage
 
@@ -62,6 +62,6 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Numeric status page id (the page names its domain)
-terraform import uptimeify_status_page_domain.acme 42
+# Numeric domain id
+terraform import uptimeify_status_page_domain.acme 17
 ```

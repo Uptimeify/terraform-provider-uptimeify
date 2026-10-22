@@ -7,8 +7,19 @@ import (
 	"net/url"
 )
 
-// CustomerDetail is GET /api/customers/{id} plus the permission overrides that only the POST
-// answer carries (customers.ts customerRow). GET and PATCH never return the overrides.
+// Opt is a response field the API may leave out: Set reports whether the key was present
+// (a JSON null included), V holds the value.
+type Opt[T any] struct {
+	Set bool
+	V   *T
+}
+
+func (o *Opt[T]) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	return json.Unmarshal(b, &o.V)
+}
+
+// CustomerDetail is GET /api/customers/{id} and the POST answer (customers.ts customerRow).
 type CustomerDetail struct {
 	ID                      int64             `json:"id"`
 	PublicID                string            `json:"publicId"`
@@ -19,6 +30,7 @@ type CustomerDetail struct {
 	NotificationEmail       *string           `json:"notificationEmail"`
 	CompanyName             *string           `json:"companyName"`
 	PackageID               *int64            `json:"packageId"`
+	PackageType             string            `json:"packageType"`
 	PackageDisplayName      *string           `json:"packageDisplayName"`
 	Status                  string            `json:"status"`
 	CustomFields            json.RawMessage   `json:"customFields"`
@@ -28,15 +40,16 @@ type CustomerDetail struct {
 	CreatedAt               string            `json:"createdAt"`
 	UpdatedAt               string            `json:"updatedAt"`
 
-	// POST answer only.
-	AllowSelfService            *bool  `json:"allowSelfService"`
-	MaxSelfServiceURLs          *int64 `json:"maxSelfServiceUrls"`
-	CanEditManaged              *bool  `json:"canEditManaged"`
-	EnableEmailAlerts           *bool  `json:"enableEmailAlerts"`
-	EnableSmsAlerts             *bool  `json:"enableSmsAlerts"`
-	EnableWebhookAlerts         *bool  `json:"enableWebhookAlerts"`
-	EnableIntegrationAlerts     *bool  `json:"enableIntegrationAlerts"`
-	EnablePostRequestEscalation *bool  `json:"enablePostRequestEscalation"`
+	// Permission overrides (null = package default). GET leaves them out for callers that may not
+	// write them (lib/customers/permission-overrides.ts), so absent means "unknown", not null.
+	AllowSelfService            Opt[bool]  `json:"allowSelfService"`
+	MaxSelfServiceURLs          Opt[int64] `json:"maxSelfServiceUrls"`
+	CanEditManaged              Opt[bool]  `json:"canEditManaged"`
+	EnableEmailAlerts           Opt[bool]  `json:"enableEmailAlerts"`
+	EnableSmsAlerts             Opt[bool]  `json:"enableSmsAlerts"`
+	EnableWebhookAlerts         Opt[bool]  `json:"enableWebhookAlerts"`
+	EnableIntegrationAlerts     Opt[bool]  `json:"enableIntegrationAlerts"`
+	EnablePostRequestEscalation Opt[bool]  `json:"enablePostRequestEscalation"`
 }
 
 func (c *Client) GetCustomerDetail(ctx context.Context, id string) (*CustomerDetail, error) {

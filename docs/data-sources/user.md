@@ -29,5 +29,6 @@ data "uptimeify_user" "alice" {
 
 - `id` (String) User id, as `user_id` in IM resources.
 - `is_active` (Boolean)
+- `language` (String) `de`, `en` or `da`; null = organization language.
 - `name` (String)
 - `role` (String) `admin`, `editor`, `readonly` or `responder`. IM accepts admin, editor and responder.

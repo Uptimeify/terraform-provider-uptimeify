@@ -3,12 +3,12 @@
 page_title: "uptimeify_customer Resource - uptimeify"
 subcategory: ""
 description: |-
-  A customer of the organization. Needs an organization token with write access (customer tokens cannot create customers). Destroying it deletes the customer with its monitors and history. Import with the numeric id or the public id; package_type, delete_user_action and the permission overrides cannot be read back and stay unset after an import.
+  A customer of the organization. Needs an organization token with write access (customer tokens cannot create customers). Destroying it deletes the customer with its monitors and history. Import with the numeric id or the public id. delete_user_action cannot be read back; the permission overrides are read back only with a token that may write them, otherwise they stay unset after an import.
 ---
 
 # uptimeify_customer (Resource)
 
-A customer of the organization. Needs an organization token with write access (customer tokens cannot create customers). Destroying it deletes the customer with its monitors and history. Import with the numeric id or the public id; `package_type`, `delete_user_action` and the permission overrides cannot be read back and stay unset after an import.
+A customer of the organization. Needs an organization token with write access (customer tokens cannot create customers). Destroying it deletes the customer with its monitors and history. Import with the numeric id or the public id. `delete_user_action` cannot be read back; the permission overrides are read back only with a token that may write them, otherwise they stay unset after an import.
 
 ## Example Usage
 
@@ -33,25 +33,25 @@ resource "uptimeify_customer" "shop" {
 
 ### Optional
 
-- `allow_self_service` (Boolean) Customer logins may add their own monitors. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `can_edit_managed` (Boolean) Customer logins may edit managed monitors. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
+- `allow_self_service` (Boolean) Customer logins may add their own monitors. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `can_edit_managed` (Boolean) Customer logins may edit managed monitors. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
 - `company_name` (String)
 - `custom_fields` (String) Values of the organization's custom fields as a JSON object (`jsonencode({ contract = "A-1" })`), keyed by `field_key`. Replaced as a whole.
 - `delete_user_action` (String) On destroy, logins assigned only to this customer are `deactivate`d (default) or `delete`d.
 - `email` (String) Contact email of the customer.
 - `email_language` (String) Language of mails to this customer. Unset = organization language.
-- `enable_email_alerts` (Boolean) Email alerts. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `enable_integration_alerts` (Boolean) Integration alerts (Slack, PagerDuty, ...). Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `enable_post_request_escalation` (Boolean) POST request escalation. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `enable_sms_alerts` (Boolean) SMS alerts. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `enable_webhook_alerts` (Boolean) Webhook alerts. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
-- `max_self_service_urls` (Number) Cap for self-service monitors. Unset = package default. Only an organization writer with unrestricted scope sets it (otherwise the API ignores it); the API never returns it, so changes made outside Terraform are not detected.
+- `enable_email_alerts` (Boolean) Email alerts. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `enable_integration_alerts` (Boolean) Integration alerts (Slack, PagerDuty, ...). Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `enable_post_request_escalation` (Boolean) POST request escalation. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `enable_sms_alerts` (Boolean) SMS alerts. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `enable_webhook_alerts` (Boolean) Webhook alerts. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
+- `max_self_service_urls` (Number) Cap for self-service monitors. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
 - `monthly_reports_enabled` (Boolean) Monthly report mails. Unset at create = package default; unset later = keep.
 - `notification_email` (String) Alert recipient address of this customer.
 - `notification_phone_number` (String) Alert SMS number of this customer.
 - `notification_targets` (Map of String) Who receives each channel type: keys `sms`, `email`, `webhook`, `integrations`; values `customer` or `organization`. Unset = organization default.
 - `package_id` (Number) Package configuration id of the organization. Set this or `package_type`. Changing the package needs organization write access.
-- `package_type` (String) Package key or display name, resolved to `package_id`. Set this or `package_id`. Not returned by the API.
+- `package_type` (String) Package key or display name, resolved to `package_id`. Set this or `package_id`. Kept as written while the package stays the same; otherwise (import, unset, package changed elsewhere) the API's package key.
 - `status` (String) `active` or `inactive`; `inactive` pauses every monitor of the customer.
 
 ### Read-Only

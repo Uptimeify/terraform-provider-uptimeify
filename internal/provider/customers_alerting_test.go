@@ -165,7 +165,8 @@ func TestAccCustomerIPDomain(t *testing.T) {
 				),
 			},
 			{ResourceName: "uptimeify_customer.c", ImportState: true, ImportStateVerify: true,
-				ImportStateVerifyIgnore: append([]string{"package_type", "delete_user_action"}, customerOverrides...)},
+				// package_type (a key here) and the overrides are read back; delete_user_action is not.
+				ImportStateVerifyIgnore: []string{"delete_user_action"}},
 			{ResourceName: "uptimeify_customer_ip.i", ImportState: true, ImportStateVerify: true},
 			{ResourceName: "uptimeify_customer_domain.d", ImportState: true, ImportStateVerify: true},
 			{ // drift: IP and domain deleted outside Terraform
@@ -478,4 +479,47 @@ resource "uptimeify_custom_field" "f" {
   %s
 }
 `, strings.ReplaceAll(key, "_", " "), key, typ, extra)
+}
+
+// Unit: overrides from GET land in the model when present (null included) and stay as they are
+// when the API leaves them out; package_type keeps the written identifier while the package stays.
+func TestCustomerFromAPIOverridesAndPackageType(t *testing.T) {
+	ctx := context.Background()
+	decode := func(pkgID int64, pkgType, extra string) *client.CustomerDetail {
+		var c client.CustomerDetail
+		js := fmt.Sprintf(`{"id":1,"publicId":"c-1","organizationId":3,"name":"Acme","packageId":%d,"packageType":%q,
+			"status":"active","customFields":{},"monthlyReportsEnabled":true,"createdAt":"a","updatedAt":"b"%s}`, pkgID, pkgType, extra)
+		if err := json.Unmarshal([]byte(js), &c); err != nil {
+			t.Fatal(err)
+		}
+		return &c
+	}
+	m := customerResourceModel{PackageID: types.Int64Value(4), PackageType: types.StringValue("Business"),
+		AllowSelfService: types.BoolValue(true), MaxSelfServiceURLs: types.Int64Value(5), CanEditManaged: types.BoolValue(true)}
+
+	m.fromAPI(ctx, decode(4, "business", ""))
+	if m.AllowSelfService.ValueBool() != true || m.MaxSelfServiceURLs.ValueInt64() != 5 || !m.CanEditManaged.ValueBool() {
+		t.Fatalf("absent overrides must be kept: %+v", m)
+	}
+	if m.PackageType.ValueString() != "Business" {
+		t.Fatalf("same package: package_type %s, want the written Business", m.PackageType)
+	}
+
+	m.fromAPI(ctx, decode(4, "business", `,"allowSelfService":null,"maxSelfServiceUrls":null,"canEditManaged":false,
+		"enableEmailAlerts":null,"enableSmsAlerts":true,"enableWebhookAlerts":null,"enableIntegrationAlerts":null,"enablePostRequestEscalation":false`))
+	if !m.AllowSelfService.IsNull() || !m.MaxSelfServiceURLs.IsNull() || m.CanEditManaged.ValueBool() ||
+		!m.EnableSmsAlerts.ValueBool() || m.EnablePostRequestEscalation.IsNull() || m.EnablePostRequestEscalation.ValueBool() {
+		t.Fatalf("present overrides must be read: %+v", m)
+	}
+
+	m.fromAPI(ctx, decode(6, "pro", ""))
+	if m.PackageType.ValueString() != "pro" || m.PackageID.ValueInt64() != 6 {
+		t.Fatalf("package changed elsewhere: %s / %s", m.PackageType, m.PackageID)
+	}
+
+	imported := customerResourceModel{}
+	imported.fromAPI(ctx, decode(4, "business", ""))
+	if imported.PackageType.ValueString() != "business" {
+		t.Fatalf("import: package_type %s", imported.PackageType)
+	}
 }

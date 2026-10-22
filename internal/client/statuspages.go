@@ -41,9 +41,6 @@ type StatusPage struct {
 	AccessPasswordSetAt      *string      `json:"accessPasswordSetAt"`
 	CreatedAt                string       `json:"createdAt"`
 	UpdatedAt                string       `json:"updatedAt"`
-	CustomDomain             *struct {
-		ID int64 `json:"id"`
-	} `json:"customDomain"`
 }
 
 func statusPagePath(id string) string { return "/api/status-pages/" + url.PathEscape(id) }
@@ -128,6 +125,7 @@ func (c *Client) ResetStatusPageDesign(ctx context.Context, pageID string) error
 
 type StatusPageDomain struct {
 	ID                int64   `json:"id"`
+	StatusPageID      *int64  `json:"statusPageId"` // GET only; null while unbound
 	Hostname          string  `json:"hostname"`
 	Status            string  `json:"status"`
 	VerificationToken *string `json:"verificationToken"`

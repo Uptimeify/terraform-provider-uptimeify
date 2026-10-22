@@ -74,7 +74,7 @@ func (r *statusPageDomainResource) Schema(_ context.Context, _ resource.SchemaRe
 			"2. Verify and activate: `uptimeify_status_page_domain_activation` (runs verify + activate once), or " +
 			"`POST /api/status-pages/domains/verify` and `.../activate` with `{\"domainId\": <id>}`.\n\n" +
 			"`status` is read from the API: `pending`, `verified` or `active`. Deleting the status page deletes its domain. " +
-			"Import with the numeric status page id.",
+			"Import with the numeric domain id.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Numeric domain id."},
 			"status_page_id": schema.Int64Attribute{Required: true, Description: "Numeric status page id. Changing it replaces the domain.",
@@ -136,6 +136,7 @@ func (r *statusPageDomainResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 	state.fromAPI(d, dns)
+	state.StatusPageID = types.Int64PointerValue(d.StatusPageID) // only the GET names the page
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -161,25 +162,13 @@ func (r *statusPageDomainResource) Delete(ctx context.Context, req resource.Dele
 	}
 }
 
-// ImportState takes the status page id: GET /api/status-pages/domains/{id} does not name the page,
-// the page names its domain.
+// ImportState takes the domain id; Read fills status_page_id from the GET.
 func (r *statusPageDomainResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	pageID, err := strconv.ParseInt(req.ID, 10, 64)
-	if err != nil || pageID <= 0 {
-		resp.Diagnostics.AddError("Invalid import id", "expected the numeric status page id, got "+strconv.Quote(req.ID))
+	if id, err := strconv.ParseInt(req.ID, 10, 64); err != nil || id <= 0 {
+		resp.Diagnostics.AddError("Invalid import id", "expected the numeric domain id, got "+strconv.Quote(req.ID))
 		return
 	}
-	p, err := r.client.GetStatusPage(ctx, req.ID)
-	if err != nil {
-		resp.Diagnostics.AddError("Reading status page failed", err.Error())
-		return
-	}
-	if p.CustomDomain == nil {
-		resp.Diagnostics.AddError("Status page has no custom domain", fmt.Sprintf("status page %d has no custom domain to import", pageID))
-		return
-	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status_page_id"), pageID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strconv.FormatInt(p.CustomDomain.ID, 10))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 }
 
 // ---- uptimeify_status_page_domain_activation ----------------------------------------------------

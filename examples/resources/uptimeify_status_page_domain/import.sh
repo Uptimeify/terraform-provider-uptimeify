@@ -1,2 +1,2 @@
-# Numeric status page id (the page names its domain)
-terraform import uptimeify_status_page_domain.acme 42
+# Numeric domain id
+terraform import uptimeify_status_page_domain.acme 17
