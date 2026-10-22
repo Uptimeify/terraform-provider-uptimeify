@@ -17,6 +17,14 @@ jobs:
       GO_SHA256_arm64: 9bf234ea70ffec9347fdf6b22ce4add51717d3386a38a441e8c8743fceb5eaee
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      # Keine KI-Zuschreibung in der History (der GitHub-Spiegel ist oeffentlich gedacht).
+      - name: no AI attribution in commits
+        run: |
+          if git log --format=%B | grep -iE '^(co-authored-by:|claude-session:)|generated with.*claude'; then
+            echo "::error::commit message carries AI attribution"; exit 1
+          fi
       - name: Install Go
         run: |
           case "$(uname -m)" in
