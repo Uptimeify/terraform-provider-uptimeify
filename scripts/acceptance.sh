@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Acceptance tests (TF_ACC=1) against a real Uptimeify API, run with OpenTofu 1.11.14 inside a Go
-# container. No Go or tofu on the host.
+# Acceptance tests (TF_ACC=1) against a real Uptimeify API, run with OpenTofu 1.11.14 (default) or
+# Terraform 1.17.0 (ACC_CLI=terraform) inside a Go container. No Go, tofu or terraform on the host.
 #
 #   UPTIMEIFY_ENDPOINT=http://host.docker.internal:3001 UPTIMEIFY_API_TOKEN=wsm_... scripts/acceptance.sh
+#   ACC_CLI=terraform UPTIMEIFY_API_TOKEN=wsm_... scripts/acceptance.sh
 #
 # Against the website-monitoring sandbox: `make sandbox` + `make sandbox-app` there (app on host
 # :3001), so from this container the endpoint is http://host.docker.internal:3001 (the default).
@@ -33,38 +34,56 @@ UPTIMEIFY_ENDPOINT="${UPTIMEIFY_ENDPOINT:-http://host.docker.internal:3001}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 GO_IMAGE="${GO_IMAGE:-golang:1.25-alpine}"
-TOFU_VERSION=1.11.14
-# From https://github.com/opentofu/opentofu/releases/download/v1.11.14/tofu_1.11.14_SHA256SUMS
-TOFU_SHA256_amd64=8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6
-TOFU_SHA256_arm64=3171726f7b1164af56fb67368742aa851162b8a9a60628ff73b8590e7f22dc73
+ACC_CLI="${ACC_CLI:-tofu}"
+case "$ACC_CLI" in
+  tofu)
+    CLI_VERSION=1.11.14
+    CLI_BASE="https://github.com/opentofu/opentofu/releases/download/v${CLI_VERSION}/tofu_${CLI_VERSION}"
+    # From https://github.com/opentofu/opentofu/releases/download/v1.11.14/tofu_1.11.14_SHA256SUMS
+    CLI_SHA256_amd64=8279a6c6d4044899ae77190fc50c40c147615a76aca13ea605d68320c424c2a6
+    CLI_SHA256_arm64=3171726f7b1164af56fb67368742aa851162b8a9a60628ff73b8590e7f22dc73
+    CLI_BANNER="OpenTofu v$CLI_VERSION"
+    PROVIDER_HOST=registry.opentofu.org ;;
+  terraform)
+    CLI_VERSION=1.17.0
+    CLI_BASE="https://releases.hashicorp.com/terraform/${CLI_VERSION}/terraform_${CLI_VERSION}"
+    # From https://releases.hashicorp.com/terraform/1.17.0/terraform_1.17.0_SHA256SUMS
+    CLI_SHA256_amd64=c168cab7c637a8769fdb90089ddd19de701bc6ff8aca64dc2e2185fe46f59f67
+    CLI_SHA256_arm64=f32478134ffc6d710eec474bbd316652cdddc0f4e336973a3745e8d3a3309cdf
+    CLI_BANNER="Terraform v$CLI_VERSION"
+    PROVIDER_HOST=registry.terraform.io ;;
+  *) echo "ACC_CLI must be tofu or terraform" >&2; exit 2 ;;
+esac
 
 # TF_ACC_PROVIDER_HOST/NAMESPACE: plugin-testing reattaches the in-process provider under
-# <host>/<namespace>/uptimeify; the test config uses source "uptimeify/uptimeify", which OpenTofu
-# resolves against registry.opentofu.org.
+# <host>/<namespace>/uptimeify; the test config uses source "uptimeify/uptimeify", which each CLI
+# resolves against its own default registry.
 docker run --rm \
   ${ACC_DOCKER_NET:---add-host=host.docker.internal:host-gateway} \
-  -v "$REPO:/src" -v tfp-gomod:/go/pkg/mod -v tfp-gocache:/root/.cache/go-build -v tfp-tofu:/opt/tofu \
+  -v "$REPO:/src" -v tfp-gomod:/go/pkg/mod -v tfp-gocache:/root/.cache/go-build -v "tfp-$ACC_CLI:/opt/cli" \
   -w /src \
   -e UPTIMEIFY_ENDPOINT="$UPTIMEIFY_ENDPOINT" \
   -e UPTIMEIFY_API_TOKEN \
   $(env | grep -o '^UPTIMEIFY_ACC_[A-Z_]*' | sed 's/^/-e /') \
-  -e TOFU_VERSION="$TOFU_VERSION" \
-  -e TOFU_SHA256_amd64="$TOFU_SHA256_amd64" \
-  -e TOFU_SHA256_arm64="$TOFU_SHA256_arm64" \
+  -e ACC_CLI="$ACC_CLI" \
+  -e CLI_BASE="$CLI_BASE" \
+  -e CLI_BANNER="$CLI_BANNER" \
+  -e CLI_SHA256_amd64="$CLI_SHA256_amd64" \
+  -e CLI_SHA256_arm64="$CLI_SHA256_arm64" \
   -e TF_ACC=1 \
-  -e TF_ACC_TERRAFORM_PATH=/opt/tofu/tofu \
-  -e TF_ACC_PROVIDER_HOST=registry.opentofu.org \
+  -e TF_ACC_TERRAFORM_PATH="/opt/cli/$ACC_CLI" \
+  -e TF_ACC_PROVIDER_HOST="$PROVIDER_HOST" \
   -e TF_ACC_PROVIDER_NAMESPACE=uptimeify \
   -e CHECKPOINT_DISABLE=1 \
   "$GO_IMAGE" sh -euc '
     arch=$(go env GOARCH)
-    if [ "$(/opt/tofu/tofu version 2>/dev/null | head -1)" != "OpenTofu v$TOFU_VERSION" ]; then
-      zip="tofu_${TOFU_VERSION}_linux_${arch}.zip"
-      wget -qO "/tmp/$zip" "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/$zip"
-      eval "want=\$TOFU_SHA256_$arch"
+    if [ "$(/opt/cli/$ACC_CLI version 2>/dev/null | head -1)" != "$CLI_BANNER" ]; then
+      zip="${CLI_BASE##*/}_linux_${arch}.zip"
+      wget -qO "/tmp/$zip" "${CLI_BASE}_linux_${arch}.zip"
+      eval "want=\$CLI_SHA256_$arch"
       echo "$want  /tmp/$zip" | sha256sum -c -
-      unzip -oq "/tmp/$zip" tofu -d /opt/tofu
+      unzip -oq "/tmp/$zip" "$ACC_CLI" -d /opt/cli
     fi
-    /opt/tofu/tofu version | head -1
+    /opt/cli/$ACC_CLI version | head -1
     go test -count=1 -v -timeout 30m ./internal/provider -run "^TestAcc"
   '
