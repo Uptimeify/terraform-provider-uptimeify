@@ -61,6 +61,7 @@ type statusPageModel struct {
 	IsPublished              types.Bool   `tfsdk:"is_published"`
 	SubscriptionsEnabled     types.Bool   `tfsdk:"subscriptions_enabled"`
 	SubscriptionDelayMinutes types.Int64  `tfsdk:"subscription_delay_minutes"`
+	IncludeCustomerMonitors  types.Bool   `tfsdk:"include_customer_monitors"`
 	HiddenMonitors           types.Set    `tfsdk:"hidden_monitors"`
 	HasPassword              types.Bool   `tfsdk:"has_password"`
 	AccessPasswordSetAt      types.String `tfsdk:"access_password_set_at"`
@@ -87,6 +88,7 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 	m.IsPublished = types.BoolValue(p.IsPublished)
 	m.SubscriptionsEnabled = types.BoolValue(p.SubscriptionsEnabled)
 	m.SubscriptionDelayMinutes = types.Int64Value(p.SubscriptionDelayMinutes)
+	m.IncludeCustomerMonitors = types.BoolValue(p.IncludeCustomerMonitors)
 	elems := []attr.Value{} // never null: the attribute defaults to an empty set
 	for _, h := range p.HiddenMonitors {
 		elems = append(elems, types.ObjectValueMust(monitorRefAttrTypes, map[string]attr.Value{
@@ -119,7 +121,8 @@ func (r *statusPageResource) Metadata(_ context.Context, req resource.MetadataRe
 func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	resp.Schema = schema.Schema{
-		Description: "A status page of one customer. It shows every monitor of the customer except `hidden_monitors`. " +
+		Description: "A status page of one customer. It shows its components (`uptimeify_status_page_component`) and, with " +
+			"`include_customer_monitors`, every monitor of the customer except `hidden_monitors`. " +
 			"Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, " +
 			"`uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. " +
 			"Import with the numeric id or the public id.",
@@ -157,6 +160,9 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"subscription_delay_minutes": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(5),
 				Description: "Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.",
 				Validators:  []validator.Int64{int64validator.Between(1, 120)}},
+			"include_customer_monitors": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				Description: "Show every monitor of the customer (minus `hidden_monitors`) after the explicit components " +
+					"(`uptimeify_status_page_component`). `false` = only the components. Default `true`."},
 			"hidden_monitors": schema.SetNestedAttribute{
 				Optional: true, Computed: true,
 				Default:     setdefault.StaticValue(types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil)),
@@ -195,6 +201,7 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 		"isPublished":              plan.IsPublished.ValueBool(),
 		"subscriptionsEnabled":     plan.SubscriptionsEnabled.ValueBool(),
 		"subscriptionDelayMinutes": plan.SubscriptionDelayMinutes.ValueInt64(),
+		"includeCustomerMonitors":  plan.IncludeCustomerMonitors.ValueBool(),
 		"hiddenMonitors":           hiddenMonitorsToAPI(ctx, plan.HiddenMonitors),
 	}
 	wantSlug := !plan.Slug.IsUnknown() && !plan.Slug.IsNull()
@@ -286,6 +293,9 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	if !plan.SubscriptionDelayMinutes.Equal(state.SubscriptionDelayMinutes) {
 		patch["subscriptionDelayMinutes"] = plan.SubscriptionDelayMinutes.ValueInt64()
+	}
+	if !plan.IncludeCustomerMonitors.Equal(state.IncludeCustomerMonitors) {
+		patch["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
 	}
 	if !plan.HiddenMonitors.Equal(state.HiddenMonitors) {
 		patch["hiddenMonitors"] = hiddenMonitorsToAPI(ctx, plan.HiddenMonitors)

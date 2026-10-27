@@ -37,6 +37,7 @@ resource "uptimeify_status_page_design" "acme" {
 - `accent_color` (String) 6-digit hex color, e.g. `#6366f1` (default).
 - `card_radius` (String) `none`, `md` (default) or `xl`.
 - `color_scheme` (String) `light`, `dark` or `auto` (default).
+- `custom_css` (String) Own CSS for the public page only, at most 20000 bytes; empty string = none (default). No `url()`, `@import`, `@font-face` or other resource loads; a rejected stylesheet fails the apply. Kept as written in state; the server's regenerated form is `custom_css_stored`.
 - `custom_subtitle` (String) Up to 200 characters.
 - `custom_title` (String) Visible page title, up to 120 characters. Empty = the page name.
 - `font_family` (String) `system` (default) or `mono`.
@@ -58,6 +59,7 @@ resource "uptimeify_status_page_design" "acme" {
 
 ### Read-Only
 
+- `custom_css_stored` (String) `custom_css` as the server stored it (regenerated and minified). A change made outside Terraform shows up here and in `custom_css`.
 - `id` (String) Same as `status_page_id`.
 - `seo_title` (String) `<title>` override; not settable through the API.
 

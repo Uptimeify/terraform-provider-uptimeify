@@ -253,6 +253,7 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttr(r, "subscriptions_enabled", "true"),
 					tfresource.TestCheckResourceAttr(r, "subscription_delay_minutes", "5"),
 					tfresource.TestCheckResourceAttr(r, "has_password", "false"),
+					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "true"),
 					tfresource.TestCheckResourceAttr(r, "hidden_monitors.#", "1"),
 					tfresource.TestCheckResourceAttrSet(r, "public_id"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_status_page.by_id", "public_id", r, "public_id"),
@@ -314,7 +315,8 @@ resource "uptimeify_status_page_design" "d" {
   accent_color    = "#112233"
   history_days    = 14
   show_powered_by = false
-  custom_title    = "tfacc title"`)
+  custom_title    = "tfacc title"
+  custom_css      = ".tfacc { color: red; }"`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -341,9 +343,12 @@ resource "uptimeify_status_page_design" "d" {
 					tfresource.TestCheckResourceAttr(r, "show_powered_by", "false"),
 					tfresource.TestCheckResourceAttr(r, "custom_title", "tfacc title"),
 					tfresource.TestCheckResourceAttr(r, "history_days", "14"),
+					tfresource.TestCheckResourceAttr(r, "custom_css", ".tfacc { color: red; }"),
+					tfresource.TestCheckResourceAttr(r, "custom_css_stored", ".tfacc{color:red}"),
 				),
 			},
-			{ResourceName: r, ImportState: true, ImportStateVerify: true},
+			// import reads the stored (regenerated) form; custom_css_stored is compared instead
+			{ResourceName: r, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"custom_css"}},
 			{ // drift: changed outside Terraform
 				PreConfig: func() {
 					accPreCheck(t)
@@ -363,7 +368,7 @@ resource "uptimeify_status_page_design" "d" {
 					if err != nil {
 						return err
 					}
-					if d.Layout != "statusboard" || !d.ShowPoweredBy || d.HistoryDays != 30 || d.CustomTitle != "" {
+					if d.Layout != "statusboard" || !d.ShowPoweredBy || d.HistoryDays != 30 || d.CustomTitle != "" || d.CustomCSS != "" {
 						return fmt.Errorf("design not reset: %+v", d)
 					}
 					return nil

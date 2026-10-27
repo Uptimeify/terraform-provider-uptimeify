@@ -15,6 +15,9 @@ var (
 	StatusPageVisibilities = []string{"public", "customer_members_only", "password_protected"}
 	MonitorKinds           = []string{"http", "dns", "icmp", "smtp", "ssh", "tcp", "ftp", "imap_pop"}
 	StatusPageTargetStates = []string{"warning", "degraded"}
+	// ComponentSourceKinds and ComponentManualStatuses mirror createStatusPageComponentSchema.
+	ComponentSourceKinds    = []string{"monitor", "manual", "dependency"}
+	ComponentManualStatuses = []string{"operational", "degraded", "partial_outage", "major_outage", "maintenance"}
 )
 
 type MonitorRef struct {
@@ -36,6 +39,7 @@ type StatusPage struct {
 	IsPublished              bool         `json:"isPublished"`
 	SubscriptionsEnabled     bool         `json:"subscriptionsEnabled"`
 	SubscriptionDelayMinutes int64        `json:"subscriptionDelayMinutes"`
+	IncludeCustomerMonitors  bool         `json:"includeCustomerMonitors"`
 	HiddenMonitors           []MonitorRef `json:"hiddenMonitors"`
 	HasPassword              bool         `json:"hasPassword"`
 	AccessPasswordSetAt      *string      `json:"accessPasswordSetAt"`
@@ -101,6 +105,7 @@ type StatusPageDesign struct {
 	ShowMaintenance  bool   `json:"showMaintenance"`
 	MaintenanceLimit int64  `json:"maintenanceLimit"`
 	MaintenanceDays  int64  `json:"maintenanceDays"`
+	CustomCSS        string `json:"customCss"`
 }
 
 type designEnvelope struct {
@@ -206,4 +211,97 @@ func (c *Client) UpdateImStatuspageRule(ctx context.Context, id string, patch ma
 
 func (c *Client) DeleteImStatuspageRule(ctx context.Context, id string) error {
 	return c.Do(ctx, http.MethodDelete, imRulePath(id), nil, nil)
+}
+
+// StatusPageComponent is one row of GET /api/status-pages/{id}/components.
+type StatusPageComponent struct {
+	ID             int64   `json:"id"`
+	PublicID       string  `json:"publicId"`
+	StatusPageID   int64   `json:"statusPageId"`
+	GroupID        *int64  `json:"groupId"`
+	Sort           int64   `json:"sort"`
+	Name           string  `json:"name"`
+	Description    *string `json:"description"`
+	ShowUptime     bool    `json:"showUptime"`
+	SourceKind     string  `json:"sourceKind"`
+	MonitorType    *string `json:"monitorType"`
+	MonitorID      *int64  `json:"monitorId"`
+	ManualStatus   *string `json:"manualStatus"`
+	DependencySlug *string `json:"dependencySlug"`
+	CreatedAt      string  `json:"createdAt"`
+	UpdatedAt      string  `json:"updatedAt"`
+}
+
+// StatusPageComponentGroup is one row of GET /api/status-pages/{id}/groups.
+type StatusPageComponentGroup struct {
+	ID           int64  `json:"id"`
+	PublicID     string `json:"publicId"`
+	StatusPageID int64  `json:"statusPageId"`
+	Name         string `json:"name"`
+	Sort         int64  `json:"sort"`
+	Collapsed    bool   `json:"collapsed"`
+	CreatedAt    string `json:"createdAt"`
+	UpdatedAt    string `json:"updatedAt"`
+}
+
+func pageSubPath(pageID int64, kind string) string {
+	return statusPagePath(strconv.FormatInt(pageID, 10)) + "/" + kind
+}
+
+func pageSubItemPath(pageID int64, kind string, id int64) string {
+	return pageSubPath(pageID, kind) + "/" + strconv.FormatInt(id, 10)
+}
+
+// There is no single GET; the lists hold every row of a page (at most 100 components).
+func findByID[T any](items []T, id func(T) int64, want int64) (*T, error) {
+	for i := range items {
+		if id(items[i]) == want {
+			return &items[i], nil
+		}
+	}
+	return nil, &APIError{StatusCode: http.StatusNotFound, StatusMessage: "not found"}
+}
+
+func (c *Client) GetStatusPageComponent(ctx context.Context, pageID, id int64) (*StatusPageComponent, error) {
+	var env itemsEnvelope[StatusPageComponent]
+	if err := c.Do(ctx, http.MethodGet, pageSubPath(pageID, "components"), nil, &env); err != nil {
+		return nil, err
+	}
+	return findByID(env.Items, func(x StatusPageComponent) int64 { return x.ID }, id)
+}
+
+func (c *Client) CreateStatusPageComponent(ctx context.Context, pageID int64, body map[string]any) (*StatusPageComponent, error) {
+	var out StatusPageComponent
+	return &out, c.Do(ctx, http.MethodPost, pageSubPath(pageID, "components"), body, &out)
+}
+
+func (c *Client) UpdateStatusPageComponent(ctx context.Context, pageID, id int64, patch map[string]any) (*StatusPageComponent, error) {
+	var out StatusPageComponent
+	return &out, c.Do(ctx, http.MethodPatch, pageSubItemPath(pageID, "components", id), patch, &out)
+}
+
+func (c *Client) DeleteStatusPageComponent(ctx context.Context, pageID, id int64) error {
+	return c.Do(ctx, http.MethodDelete, pageSubItemPath(pageID, "components", id), nil, nil)
+}
+
+func (c *Client) GetStatusPageComponentGroup(ctx context.Context, pageID, id int64) (*StatusPageComponentGroup, error) {
+	var env itemsEnvelope[StatusPageComponentGroup]
+	if err := c.Do(ctx, http.MethodGet, pageSubPath(pageID, "groups"), nil, &env); err != nil {
+		return nil, err
+	}
+	return findByID(env.Items, func(x StatusPageComponentGroup) int64 { return x.ID }, id)
+}
+
+func (c *Client) CreateStatusPageComponentGroup(ctx context.Context, pageID int64, body map[string]any) (*StatusPageComponentGroup, error) {
+	var out StatusPageComponentGroup
+	return &out, c.Do(ctx, http.MethodPost, pageSubPath(pageID, "groups"), body, &out)
+}
+
+func (c *Client) UpdateStatusPageComponentGroup(ctx context.Context, pageID, id int64, patch map[string]any) (*StatusPageComponentGroup, error) {
+	var out StatusPageComponentGroup
+	return &out, c.Do(ctx, http.MethodPatch, pageSubItemPath(pageID, "groups", id), patch, &out)
+}
+
+func (c *Client) DeleteStatusPageComponentGroup(ctx context.Context, pageID, id int64) error {
+	return c.Do(ctx, http.MethodDelete, pageSubItemPath(pageID, "groups", id), nil, nil)
 }

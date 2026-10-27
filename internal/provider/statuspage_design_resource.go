@@ -53,6 +53,8 @@ type statusPageDesignModel struct {
 	ShowMaintenance  types.Bool   `tfsdk:"show_maintenance"`
 	MaintenanceLimit types.Int64  `tfsdk:"maintenance_limit"`
 	MaintenanceDays  types.Int64  `tfsdk:"maintenance_days"`
+	CustomCSS        types.String `tfsdk:"custom_css"`
+	CustomCSSStored  types.String `tfsdk:"custom_css_stored"`
 }
 
 // designField ties one managed attribute to its API key; seo_title is read-only (not settable).
@@ -83,6 +85,7 @@ var designFields = []designField{
 	{"showMaintenance", func(m *statusPageDesignModel) attr.Value { return m.ShowMaintenance }},
 	{"maintenanceLimit", func(m *statusPageDesignModel) attr.Value { return m.MaintenanceLimit }},
 	{"maintenanceDays", func(m *statusPageDesignModel) attr.Value { return m.MaintenanceDays }},
+	{"customCss", func(m *statusPageDesignModel) attr.Value { return m.CustomCSS }},
 }
 
 // designPatch holds every known, non-null plan value that differs from state (state nil = create).
@@ -129,6 +132,17 @@ func (m *statusPageDesignModel) fromAPI(d *client.StatusPageDesign) {
 	m.ShowMaintenance = types.BoolValue(d.ShowMaintenance)
 	m.MaintenanceLimit = types.Int64Value(d.MaintenanceLimit)
 	m.MaintenanceDays = types.Int64Value(d.MaintenanceDays)
+	m.CustomCSS = types.StringValue(d.CustomCSS)
+	m.CustomCSSStored = types.StringValue(d.CustomCSS)
+}
+
+// keepCSS: the server stores custom_css regenerated (minified), not as written. The written text
+// stays in state while the stored form is the one this provider last saw; any other stored form
+// is drift and replaces it.
+func (m *statusPageDesignModel) keepCSS(written, lastStored types.String) {
+	if !written.IsNull() && !written.IsUnknown() && (lastStored.IsUnknown() || lastStored.Equal(m.CustomCSSStored)) {
+		m.CustomCSS = written
+	}
 }
 
 func NewStatusPageDesignResource() resource.Resource { return &statusPageDesignResource{} }
@@ -190,6 +204,13 @@ func (r *statusPageDesignResource) Schema(_ context.Context, _ resource.SchemaRe
 			"show_maintenance":  flag("Default `true`."),
 			"maintenance_limit": num("1 to 50 maintenance windows. Default `5`.", 1, 50),
 			"maintenance_days":  num("How far back past maintenance is shown, 1 to 3650 days. Default `30`.", 1, 3650),
+			"custom_css": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: keepS,
+				Description: "Own CSS for the public page only, at most 20000 bytes; empty string = none (default). No `url()`, " +
+					"`@import`, `@font-face` or other resource loads; a rejected stylesheet fails the apply. Kept as written " +
+					"in state; the server's regenerated form is `custom_css_stored`.",
+				Validators: []validator.String{stringvalidator.LengthAtMost(20000)}},
+			"custom_css_stored": schema.StringAttribute{Computed: true,
+				Description: "`custom_css` as the server stored it (regenerated and minified). A change made outside Terraform shows up here and in `custom_css`."},
 		},
 	}
 }
@@ -219,7 +240,9 @@ func (r *statusPageDesignResource) Create(ctx context.Context, req resource.Crea
 		resp.Diagnostics.AddError("Setting status page design failed", err.Error())
 		return
 	}
+	written := plan.CustomCSS
 	plan.fromAPI(d)
+	plan.keepCSS(written, types.StringUnknown())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -238,7 +261,9 @@ func (r *statusPageDesignResource) Read(ctx context.Context, req resource.ReadRe
 		resp.Diagnostics.AddError("Reading status page design failed", err.Error())
 		return
 	}
+	written, lastStored := state.CustomCSS, state.CustomCSSStored
 	state.fromAPI(d)
+	state.keepCSS(written, lastStored)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -254,7 +279,9 @@ func (r *statusPageDesignResource) Update(ctx context.Context, req resource.Upda
 		resp.Diagnostics.AddError("Updating status page design failed", err.Error())
 		return
 	}
+	written := plan.CustomCSS
 	plan.fromAPI(d)
+	plan.keepCSS(written, types.StringUnknown())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
