@@ -102,7 +102,7 @@ Everything the Uptimeify API allows an API token to change: 38 resources and 25 
 | Alerting | `notification_channel`, `escalation_config` |
 | Customers | `customer`, `customer_ip`, `customer_domain` |
 | Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings` |
-| Status pages | `status_page`, `status_page_design`, `status_page_domain`, `status_page_domain_activation` |
+| Status pages | `status_page`, `status_page_design`, `status_page_component`, `status_page_component_group`, `status_page_domain`, `status_page_domain_activation` |
 | Organization | `organization_settings`, `whitelabel_domain`, `report`, `smtp_settings`, `user` |
 
 All names carry the `uptimeify_` prefix. Data sources cover the monitors and the lookups you need to

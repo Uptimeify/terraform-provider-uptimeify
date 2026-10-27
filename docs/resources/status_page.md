@@ -3,12 +3,12 @@
 page_title: "uptimeify_status_page Resource - uptimeify"
 subcategory: ""
 description: |-
-  A status page of one customer. It shows every monitor of the customer except hidden_monitors. Design, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+  A status page of one customer. It shows its components (uptimeify_status_page_component) and, with include_customer_monitors, every monitor of the customer except hidden_monitors. Design, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 ---
 
 # uptimeify_status_page (Resource)
 
-A status page of one customer. It shows every monitor of the customer except `hidden_monitors`. Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+A status page of one customer. It shows its components (`uptimeify_status_page_component`) and, with `include_customer_monitors`, every monitor of the customer except `hidden_monitors`. Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 
 ## Example Usage
 
@@ -63,6 +63,7 @@ variable "status_page_password" {
 - `access_password_wo_version` (Number) Change to resend `access_password_wo`.
 - `description` (String) Up to 1000 characters, no surrounding whitespace.
 - `hidden_monitors` (Attributes Set) Monitors of the customer the page does not show, at most 500. Default: none (every monitor is shown). (see [below for nested schema](#nestedatt--hidden_monitors))
+- `include_customer_monitors` (Boolean) Show every monitor of the customer (minus `hidden_monitors`) after the explicit components (`uptimeify_status_page_component`). `false` = only the components. Default `true`.
 - `is_published` (Boolean) Default `true`.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
 - `subscription_delay_minutes` (Number) Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.

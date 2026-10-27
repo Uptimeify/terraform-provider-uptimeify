@@ -40,6 +40,7 @@ data "uptimeify_status_page" "by_id" {
 - `description` (String)
 - `has_password` (Boolean)
 - `hidden_monitors` (Attributes Set) Monitors of the customer the page does not show. (see [below for nested schema](#nestedatt--hidden_monitors))
+- `include_customer_monitors` (Boolean) Every monitor of the customer appears after the components.
 - `is_published` (Boolean)
 - `organization_id` (Number)
 - `public_id` (String)
