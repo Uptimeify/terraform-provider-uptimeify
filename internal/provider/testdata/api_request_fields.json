@@ -22,6 +22,58 @@
     "packageType",
     "status"
   ],
+  "PATCH /api/dns-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "customerId",
+    "dnsConfig",
+    "hostname",
+    "managementType",
+    "name",
+    "status",
+    "timeoutSeconds"
+  ],
+  "PATCH /api/ftp-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "config",
+    "customerId",
+    "ftpConfig",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
+  "PATCH /api/icmp-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "config",
+    "customerId",
+    "hostname",
+    "icmpConfig",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
+  "PATCH /api/imap-pop-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "config",
+    "customerId",
+    "hostname",
+    "imapPopConfig",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
   "PATCH /api/maintenance-windows/{id}": [
     "description",
     "endTime",
@@ -63,7 +115,36 @@
     "productName",
     "termsUrl",
     "themeNeutral",
-    "themePrimary"
+    "themePrimary",
+    "themeSecondary"
+  ],
+  "PATCH /api/smtp-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "config",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "smtpConfig",
+    "status",
+    "timeoutSeconds"
+  ],
+  "PATCH /api/ssh-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "config",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "sshConfig",
+    "status",
+    "timeoutSeconds"
   ],
   "PATCH /api/status-pages/maintenances/{id}": [
     "componentIds",
@@ -135,6 +216,18 @@
     "customerId",
     "name"
   ],
+  "PATCH /api/tcp-monitors/{id}": [
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "config",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
   "PATCH /api/websites/{id}": [
     "checkInterval",
     "managementType",
@@ -164,6 +257,58 @@
     "packageId",
     "packageType",
     "status"
+  ],
+  "POST /api/dns-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "customerId",
+    "dnsConfig",
+    "hostname",
+    "managementType",
+    "name",
+    "status",
+    "timeoutSeconds"
+  ],
+  "POST /api/ftp-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "customerId",
+    "ftpConfig",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
+  "POST /api/icmp-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "customerId",
+    "hostname",
+    "icmpConfig",
+    "managementType",
+    "name",
+    "status",
+    "timeoutSeconds"
+  ],
+  "POST /api/imap-pop-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "customerId",
+    "hostname",
+    "imapPopConfig",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
   ],
   "POST /api/maintenance-windows": [
     "customerDomainId",
@@ -200,6 +345,34 @@
     "sourceChannelId",
     "type",
     "websiteId"
+  ],
+  "POST /api/smtp-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "smtpConfig",
+    "status",
+    "timeoutSeconds"
+  ],
+  "POST /api/ssh-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "checkMode",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "sshConfig",
+    "status",
+    "timeoutSeconds"
   ],
   "POST /api/status-pages": [
     "accessPassword",
@@ -251,7 +424,21 @@
     "customerId",
     "name"
   ],
+  "POST /api/tcp-monitors": [
+    "allowDuplicate",
+    "allowedCheckCountryCodes",
+    "checkInterval",
+    "config",
+    "customerId",
+    "hostname",
+    "managementType",
+    "name",
+    "port",
+    "status",
+    "timeoutSeconds"
+  ],
   "POST /api/websites": [
+    "allowDuplicate",
     "allowPaidQuotaUpgrade",
     "allowedCheckCountryCodes",
     "authMode",

@@ -32,6 +32,9 @@ resource "uptimeify_icmp_monitor" "this" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `allow_duplicate` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Create the monitor even if the customer already has one of this type for the same target. Without it the create fails with 409 `monitorAlreadyExists` and the error names the import command for the existing monitor. Sent with create only.
 - `allowed_check_country_codes` (Set of String) Upper-case ISO 3166-1 alpha-2 codes of the allowed check locations. Unset = all locations.
 - `check_interval` (Number) Minutes between checks, 1 to 1440. Defaults to 30. The customer's package can require a larger minimum.
 - `management_type` (String) `managed` or `self_service`. Only organization writers choose it; customer tokens always get `self_service`. Defaults to `managed`.

@@ -6,7 +6,6 @@ import (
 )
 
 // Branding is `branding` of GET /api/organization/whitelabel/branding (write fields only).
-// The PATCH writes the secondary color as themeNeutral, GET returns it as themeSecondary.
 type Branding struct {
 	ProductName     *string `json:"productName"`
 	HideProductName bool    `json:"hideProductName"`
@@ -27,7 +26,7 @@ func (c *Client) GetBranding(ctx context.Context) (*Branding, error) {
 	return &out.Branding, c.Do(ctx, http.MethodGet, brandingPath, nil, &out)
 }
 
-// UpdateBranding PATCHes; productName is required in every body (null clears it).
+// UpdateBranding PATCHes (merge patch: only the keys sent change, null clears).
 func (c *Client) UpdateBranding(ctx context.Context, body map[string]any) error {
 	return c.Do(ctx, http.MethodPatch, brandingPath, body, nil)
 }
@@ -37,4 +36,10 @@ func (c *Client) UpdateBranding(ctx context.Context, body map[string]any) error 
 func (c *Client) UploadBrandingAsset(ctx context.Context, kind, fileName, dataURL string) error {
 	return c.Do(ctx, http.MethodPost, brandingPath+"/upload",
 		map[string]any{"kind": kind, "fileName": fileName, "dataUrl": dataURL}, nil)
+}
+
+// DeleteBrandingAsset removes one uploaded image (kind as in UploadBrandingAsset). Nothing
+// uploaded is 404 brandingAssetNotFound; callers treat that as done.
+func (c *Client) DeleteBrandingAsset(ctx context.Context, kind string) error {
+	return c.Do(ctx, http.MethodDelete, brandingPath+"/"+kind, nil, nil)
 }

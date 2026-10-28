@@ -44,4 +44,8 @@ resource "uptimeify_website" "nightly_backup" {
   monitoring_type                = "heartbeat"
   check_interval                 = 1440
   heartbeat_grace_period_minutes = 60
+
+  # Change to any new value to mint a new token. The old token stops working
+  # immediately, so roll out the new ping URL in the same change.
+  heartbeat_token_rotation = "2026-10"
 }

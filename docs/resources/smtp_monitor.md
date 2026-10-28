@@ -44,6 +44,7 @@ resource "uptimeify_smtp_monitor" "this" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `allow_duplicate` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Create the monitor even if the customer already has one of this type for the same target. Without it the create fails with 409 `monitorAlreadyExists` and the error names the import command for the existing monitor. Sent with create only.
 - `allowed_check_country_codes` (Set of String) Upper-case ISO 3166-1 alpha-2 codes of the allowed check locations. Unset = all locations.
 - `auth_pass_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SMTP password. Required in check_mode `protocol`. Write-only (Terraform 1.11+ / OpenTofu 1.11+), never stored in state or returned by the API; sent on create and whenever the matching `*_wo_version` changes.
 - `auth_pass_wo_version` (Number) Change this number to send `auth_pass_wo` again.

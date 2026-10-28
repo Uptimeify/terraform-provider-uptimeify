@@ -32,6 +32,7 @@ import (
 var (
 	_ resource.ResourceWithConfigure   = &websiteResource{}
 	_ resource.ResourceWithImportState = &websiteResource{}
+	_ resource.ResourceWithModifyPlan  = &websiteResource{}
 )
 
 type websiteResource struct{ client *client.Client }
@@ -94,6 +95,8 @@ type websiteResourceModel struct {
 	AuthorizationHeaderWO  types.String `tfsdk:"authorization_header_wo"`
 	BasicAuthPasswordWO    types.String `tfsdk:"basic_auth_password_wo"`
 	AuthWOVersion          types.Int64  `tfsdk:"auth_wo_version"`
+	HeartbeatTokenRotation types.String `tfsdk:"heartbeat_token_rotation"`
+	AllowDuplicate         types.Bool   `tfsdk:"allow_duplicate"`
 }
 
 type headerModel struct {
@@ -392,6 +395,11 @@ func (r *websiteResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"min_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
 			"max_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
 			"heartbeat_token":              schema.StringAttribute{Computed: true, Sensitive: true, PlanModifiers: keepS, Description: "Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token."},
+			"heartbeat_token_rotation": schema.StringAttribute{Optional: true,
+				Description: "Heartbeat monitors: any value; changing it to a new non-null value mints a new heartbeat token " +
+					"(`heartbeat_token` and `url` change). The old token stops working immediately, so update the pinging job in the same rollout. " +
+					"Setting it at create does not rotate."},
+			"allow_duplicate": allowDuplicateAttr,
 			"heartbeat_grace_period_minutes": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepI,
 				Description: "Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.", Validators: []validator.Int64{int64validator.Between(1, 10080)}},
 			"has_custom_headers": schema.BoolAttribute{Computed: true, Description: "Whether custom headers are stored."},
@@ -425,9 +433,12 @@ func (r *websiteResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if cfg.AllowDuplicate.ValueBool() {
+		body["allowDuplicate"] = true
+	}
 	id, err := r.client.CreateWebsite(ctx, body)
 	if err != nil {
-		resp.Diagnostics.AddError("Creating website failed", err.Error())
+		resp.Diagnostics.AddError("Creating website failed", createErrorDetail(err, "uptimeify_website"))
 		return
 	}
 	got := plan
@@ -435,6 +446,35 @@ func (r *websiteResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(clampedChecks(&plan.websiteModel, &got.websiteModel)...)
 	// Stored even with a clamp error, so the created monitor is tracked and not orphaned.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &got)...)
+}
+
+func rotatesHeartbeat(plan, state *websiteResourceModel) bool {
+	return !plan.HeartbeatTokenRotation.IsNull() && !plan.HeartbeatTokenRotation.Equal(state.HeartbeatTokenRotation)
+}
+
+// ModifyPlan: a rotation changes the token and the url, which otherwise keep their state value.
+func (r *websiteResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	var plan, state websiteResourceModel
+	var cfgURL types.String
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("url"), &cfgURL)...)
+	if resp.Diagnostics.HasError() || !rotatesHeartbeat(&plan, &state) {
+		return
+	}
+	if plan.MonitoringType.ValueString() != "heartbeat" {
+		resp.Diagnostics.AddAttributeError(path.Root("heartbeat_token_rotation"), "Not a heartbeat monitor",
+			"heartbeat_token_rotation only works with monitoring_type = \"heartbeat\".")
+		return
+	}
+	plan.HeartbeatToken = types.StringUnknown()
+	if cfgURL.IsNull() {
+		plan.URL = types.StringUnknown()
+	}
+	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 }
 
 // websiteChecks are the package-gated check switches the server may silently switch off.
@@ -505,6 +545,10 @@ func (r *websiteResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	id := state.ID.ValueString()
+	rotate := rotatesHeartbeat(&plan, &state)
+	if plan.URL.IsUnknown() { // unknown only for a rotation: the update still writes the stored url
+		plan.URL = state.URL
+	}
 	auth := !plan.AuthMode.Equal(state.AuthMode) || !plan.BasicAuthUsername.Equal(state.BasicAuthUsername) || !plan.AuthWOVersion.Equal(state.AuthWOVersion)
 	headers := !plan.CustomHeadersWOVersion.Equal(state.CustomHeadersWOVersion)
 	reqBody := !plan.RequestBodyWOVersion.Equal(state.RequestBodyWOVersion)
@@ -518,6 +562,12 @@ func (r *websiteResource) Update(ctx context.Context, req resource.UpdateRequest
 	if len(body) > 0 {
 		if err := r.client.UpdateWebsite(ctx, id, body); err != nil {
 			resp.Diagnostics.AddError("Updating website failed", err.Error())
+			return
+		}
+	}
+	if rotate {
+		if err := r.client.RotateHeartbeatToken(ctx, id); err != nil {
+			resp.Diagnostics.AddError("Rotating heartbeat token failed", err.Error())
 			return
 		}
 	}

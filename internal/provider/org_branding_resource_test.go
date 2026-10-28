@@ -90,6 +90,10 @@ resource "uptimeify_organization_branding" "b" {
 			if !isEmpty(b) {
 				return fmt.Errorf("branding not reset after destroy: %+v", b)
 			}
+			// DELETE answers 404 only when nothing is uploaded (a probe that would also clean up).
+			if err := bc().DeleteBrandingAsset(context.Background(), "logoLight"); !client.IsNotFound(err) {
+				return fmt.Errorf("light logo still uploaded after destroy (err=%v)", err)
+			}
 			return nil
 		},
 		Steps: []tfresource.TestStep{
@@ -138,6 +142,15 @@ resource "uptimeify_organization_branding" "b" {
 				ExpectNonEmptyPlan: true,
 			},
 			{Config: cfg("tfacc-brand-2", blue, fmt.Sprintf("logo_dark_file = %q\n  hide_product_name = true", red))},
+			{ // removing logo_dark_file deletes the uploaded dark logo
+				Config: cfg("tfacc-brand-2", blue, "hide_product_name = true"),
+				Check: func(*terraform.State) error {
+					if err := bc().DeleteBrandingAsset(context.Background(), "logoDark"); !client.IsNotFound(err) {
+						return fmt.Errorf("dark logo still uploaded (err=%v)", err)
+					}
+					return nil
+				},
+			},
 		},
 	})
 }

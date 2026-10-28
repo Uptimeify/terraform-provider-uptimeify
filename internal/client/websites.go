@@ -82,3 +82,9 @@ func (c *Client) UpdateWebsite(ctx context.Context, id string, body map[string]a
 func (c *Client) DeleteWebsite(ctx context.Context, id string) error {
 	return c.Do(ctx, http.MethodDelete, "/api/websites/"+url.PathEscape(id), nil, nil)
 }
+
+// RotateHeartbeatToken mints a new heartbeat token; the old one stops working at once. The server
+// also rewrites url to heartbeat://<token>. 400 heartbeatMonitorRequired for other types.
+func (c *Client) RotateHeartbeatToken(ctx context.Context, id string) error {
+	return c.Do(ctx, http.MethodPost, "/api/websites/"+url.PathEscape(id)+"/heartbeat-token/rotate", nil, nil)
+}

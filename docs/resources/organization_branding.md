@@ -3,12 +3,12 @@
 page_title: "uptimeify_organization_branding Resource - uptimeify"
 subcategory: ""
 description: |-
-  White-label branding of the organization (one per organization): product name, colors, legal links, logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags; uploaded images stay. Import with any id, e.g. branding; the image files are not imported.
+  White-label branding of the organization (one per organization): product name, colors, legal links, logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags and deletes the four images. Import with any id, e.g. branding; the image files are not imported.
 ---
 
 # uptimeify_organization_branding (Resource)
 
-White-label branding of the organization (one per organization): product name, colors, legal links, logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags; uploaded images stay. Import with any id, e.g. `branding`; the image files are not imported.
+White-label branding of the organization (one per organization): product name, colors, legal links, logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags and deletes the four images. Import with any id, e.g. `branding`; the image files are not imported.
 
 ## Example Usage
 
@@ -32,13 +32,13 @@ resource "uptimeify_organization_branding" "this" {
 
 ### Optional
 
-- `favicon_dark_file` (String) Favicon (PNG or ICO, at most 512 KiB) for the dark theme: path of a local file. Uploaded when its content changes (see `favicon_dark_sha256`). Removing it keeps the uploaded image, the API has no way to delete one; use `hide_logos` to hide logos.
-- `favicon_light_file` (String) Favicon (PNG or ICO, at most 512 KiB) for the light theme: path of a local file. Uploaded when its content changes (see `favicon_light_sha256`). Removing it keeps the uploaded image, the API has no way to delete one; use `hide_logos` to hide logos.
+- `favicon_dark_file` (String) Favicon (PNG or ICO, at most 512 KiB) for the dark theme: path of a local file. Uploaded when its content changes (see `favicon_dark_sha256`). Removing it deletes the uploaded image.
+- `favicon_light_file` (String) Favicon (PNG or ICO, at most 512 KiB) for the light theme: path of a local file. Uploaded when its content changes (see `favicon_light_sha256`). Removing it deletes the uploaded image.
 - `hide_logos` (Boolean) Show no logo at all. Default `false`.
 - `hide_product_name` (Boolean) Hide the product name next to the logo. Default `false`.
 - `imprint_url` (String) Link to your own imprint, `http://` or `https://`, up to 500 characters.
-- `logo_dark_file` (String) Logo (PNG, JPEG or WebP, at most 2 MiB) for the dark theme: path of a local file. Uploaded when its content changes (see `logo_dark_sha256`). Removing it keeps the uploaded image, the API has no way to delete one; use `hide_logos` to hide logos.
-- `logo_light_file` (String) Logo (PNG, JPEG or WebP, at most 2 MiB) for the light theme: path of a local file. Uploaded when its content changes (see `logo_light_sha256`). Removing it keeps the uploaded image, the API has no way to delete one; use `hide_logos` to hide logos.
+- `logo_dark_file` (String) Logo (PNG, JPEG or WebP, at most 2 MiB) for the dark theme: path of a local file. Uploaded when its content changes (see `logo_dark_sha256`). Removing it deletes the uploaded image.
+- `logo_light_file` (String) Logo (PNG, JPEG or WebP, at most 2 MiB) for the light theme: path of a local file. Uploaded when its content changes (see `logo_light_sha256`). Removing it deletes the uploaded image.
 - `privacy_url` (String) Link to your own privacy policy, `http://` or `https://`, up to 500 characters.
 - `product_name` (String) Product name shown instead of Uptimeify, 1 to 80 characters. Unset = Uptimeify.
 - `terms_url` (String) Link to your own terms, `http://` or `https://`, up to 500 characters.

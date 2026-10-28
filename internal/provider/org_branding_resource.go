@@ -74,14 +74,14 @@ func (m *brandingModel) fromAPI(b *client.Branding) {
 	m.TermsURL = types.StringPointerValue(b.TermsURL)
 }
 
-// patch is the full PATCH body: every field, so the organization's branding equals the config.
+// patch sends every field (unset = null clears it), so the organization's branding equals the config.
 func (m *brandingModel) patch() map[string]any {
 	return map[string]any{
 		"productName":     m.ProductName.ValueStringPointer(),
 		"hideProductName": m.HideProductName.ValueBool(),
 		"hideLogos":       m.HideLogos.ValueBool(),
 		"themePrimary":    m.ThemePrimary.ValueStringPointer(),
-		"themeNeutral":    m.ThemeSecondary.ValueStringPointer(),
+		"themeSecondary":  m.ThemeSecondary.ValueStringPointer(),
 		"imprintUrl":      m.ImprintURL.ValueStringPointer(),
 		"privacyUrl":      m.PrivacyURL.ValueStringPointer(),
 		"termsUrl":        m.TermsURL.ValueStringPointer(),
@@ -127,14 +127,14 @@ func (r *brandingResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		attrs[a.attr+"_file"] = schema.StringAttribute{Optional: true,
 			Description: what + " for the " + map[bool]string{true: "dark", false: "light"}[a.kind == "logoDark" || a.kind == "faviconDark"] +
 				" theme: path of a local file. Uploaded when its content changes (see `" + a.attr + "_sha256`). Removing it " +
-				"keeps the uploaded image, the API has no way to delete one; use `hide_logos` to hide logos."}
+				"deletes the uploaded image."}
 		attrs[a.attr+"_sha256"] = schema.StringAttribute{Computed: true,
 			Description: "SHA-256 of `" + a.attr + "_file` at the last upload, read at plan time."}
 	}
 	resp.Schema = schema.Schema{
 		Description: "White-label branding of the organization (one per organization): product name, colors, legal links, " +
-			"logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags; uploaded " +
-			"images stay. Import with any id, e.g. `branding`; the image files are not imported.",
+			"logos and favicons. Organization admins only. Destroying it resets name, colors, links and both flags and deletes " +
+			"the four images. Import with any id, e.g. `branding`; the image files are not imported.",
 		Attributes: attrs,
 	}
 }
@@ -187,7 +187,16 @@ func (r *brandingResource) apply(ctx context.Context, plan tfsdk.Plan, prior *tf
 		if prior != nil {
 			diags.Append(prior.GetAttribute(ctx, path.Root(a.attr+"_sha256"), &old)...)
 		}
-		if file.IsNull() || sum.Equal(old) {
+		if file.IsNull() {
+			if !old.IsNull() { // the file attribute was removed: delete the uploaded image
+				if err := r.deleteAsset(ctx, a.kind); err != nil {
+					diags.AddAttributeError(path.Root(a.attr+"_file"), "Deleting "+a.attr+" failed", err.Error())
+					return
+				}
+			}
+			continue
+		}
+		if sum.Equal(old) {
 			continue
 		}
 		data, err := os.ReadFile(file.ValueString())
@@ -238,10 +247,24 @@ func (r *brandingResource) Read(ctx context.Context, req resource.ReadRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// deleteAsset treats 404 (nothing uploaded) as done.
+func (r *brandingResource) deleteAsset(ctx context.Context, kind string) error {
+	if err := r.client.DeleteBrandingAsset(ctx, kind); err != nil && !client.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
 func (r *brandingResource) Delete(ctx context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
 	empty := brandingModel{HideProductName: types.BoolValue(false), HideLogos: types.BoolValue(false)}
 	if err := r.client.UpdateBranding(ctx, empty.patch()); err != nil {
 		resp.Diagnostics.AddError("Resetting branding failed", err.Error())
+		return
+	}
+	for _, a := range brandingAssets {
+		if err := r.deleteAsset(ctx, a.kind); err != nil {
+			resp.Diagnostics.AddError("Deleting "+a.attr+" failed", err.Error())
+		}
 	}
 }
 
