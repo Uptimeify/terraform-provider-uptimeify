@@ -73,8 +73,6 @@ var parityAliases = map[string]string{
 	"* customHeaders":                       "custom_headers_wo",
 	"* requestBody":                         "request_body_wo",
 	"PATCH /api/organization/smtp password": "password_wo",
-	// PATCH writes themeNeutral, GET answers themeSecondary; the attribute follows the UI name.
-	"PATCH /api/organization/whitelabel/branding themeNeutral": "theme_secondary",
 	// One target list instead of one id field per monitor kind; recurrence is its own attribute.
 	"* websiteId":        "targets",
 	"* dnsMonitorId":     "targets",
@@ -110,7 +108,8 @@ var parityIgnored = map[string]string{
 	"* smtpConfig":                       "nested config object, flattened into the type's attributes",
 	"* sshConfig":                        "nested config object, flattened into the type's attributes",
 	"PATCH /api/icmp-monitors/{id} port": "ICMP has no port; the shared PATCH schema accepts it",
-	"* managementType":                   "not mapped yet: managed vs self-service website (customer self-service)",
+	"PATCH /api/organization/whitelabel/branding themeNeutral": "deprecated alias of themeSecondary (until 2027-02-01)",
+	"* managementType":                            "not mapped yet: managed vs self-service website (customer self-service)",
 	"POST /api/websites allowPaidQuotaUpgrade":    "one-time consent for a paid quota upgrade, not state",
 	"POST /api/websites customFields":             "not mapped yet: website custom field values",
 	"POST /api/websites dnsConfig":                "not mapped yet: DNS sub-check of the website create",

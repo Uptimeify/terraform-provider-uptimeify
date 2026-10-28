@@ -115,7 +115,8 @@
     "productName",
     "termsUrl",
     "themeNeutral",
-    "themePrimary"
+    "themePrimary",
+    "themeSecondary"
   ],
   "PATCH /api/smtp-monitors/{id}": [
     "allowedCheckCountryCodes",
