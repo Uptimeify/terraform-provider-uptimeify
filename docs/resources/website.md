@@ -65,6 +65,10 @@ resource "uptimeify_website" "nightly_backup" {
   monitoring_type                = "heartbeat"
   check_interval                 = 1440
   heartbeat_grace_period_minutes = 60
+
+  # Change to any new value to mint a new token. The old token stops working
+  # immediately, so roll out the new ping URL in the same change.
+  heartbeat_token_rotation = "2026-10"
 }
 ```
 
@@ -80,6 +84,7 @@ resource "uptimeify_website" "nightly_backup" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `allow_duplicate` (Boolean, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Create the monitor even if the customer already has one of this type for the same target. Without it the create fails with 409 `monitorAlreadyExists` and the error names the import command for the existing monitor. Sent with create only.
 - `allowed_check_country_codes` (Set of String) Upper-case ISO country codes of the check locations. Unset at create: the package default (null = all). Removing it later keeps the last value.
 - `auth_mode` (String) `none`, `authorization_header` (needs `authorization_header_wo`) or `basic` (needs `basic_auth_username` and `basic_auth_password_wo`). Defaults to `none`.
 - `auth_wo_version` (Number) Change to resend the auth secrets.
@@ -109,6 +114,7 @@ resource "uptimeify_website" "nightly_backup" {
 - `expected_status_codes` (String) Comma-separated accepted status codes. Defaults to `200,301,302`.
 - `follow_redirects` (Boolean) Defaults to `true`.
 - `heartbeat_grace_period_minutes` (Number) Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.
+- `heartbeat_token_rotation` (String) Heartbeat monitors: any value; changing it to a new non-null value mints a new heartbeat token (`heartbeat_token` and `url` change). The old token stops working immediately, so update the pinging job in the same rollout. Setting it at create does not rotate.
 - `http_method` (String) `GET`, `QUERY`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. Defaults to `GET`.
 - `max_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.
 - `min_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.

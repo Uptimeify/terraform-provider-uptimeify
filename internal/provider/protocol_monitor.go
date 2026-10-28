@@ -50,6 +50,7 @@ type monitorBase struct {
 	AllowedCheckCountryCodes types.Set    `tfsdk:"allowed_check_country_codes"`
 	CreatedAt                types.String `tfsdk:"created_at"`
 	UpdatedAt                types.String `tfsdk:"updated_at"`
+	AllowDuplicate           types.Bool   `tfsdk:"allow_duplicate"`
 }
 
 func (b *monitorBase) base() *monitorBase { return b }
@@ -206,8 +207,9 @@ func monitorBaseAttrs(title string) map[string]schema.Attribute {
 				setvalidator.ValueStringsAre(stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Z]{2}$`), "must be an upper-case two-letter country code")),
 			},
 		},
-		"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keepS},
-		"updated_at": schema.StringAttribute{Computed: true},
+		"created_at":      schema.StringAttribute{Computed: true, PlanModifiers: keepS},
+		"updated_at":      schema.StringAttribute{Computed: true},
+		"allow_duplicate": allowDuplicateAttr,
 	}
 }
 
@@ -261,9 +263,12 @@ func (r *monitorResource[M, P]) Create(ctx context.Context, req resource.CreateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if P(&cfg).base().AllowDuplicate.ValueBool() {
+		b.body["allowDuplicate"] = true
+	}
 	row, err := r.client.CreateMonitor(ctx, r.spec.kind, b.body)
 	if err != nil {
-		resp.Diagnostics.AddError("Creating "+r.spec.title+" failed", err.Error())
+		resp.Diagnostics.AddError("Creating "+r.spec.title+" failed", createErrorDetail(err, "uptimeify_"+r.spec.name))
 		return
 	}
 	resp.Diagnostics.Append(fill[M, P](ctx, &plan, row)...)

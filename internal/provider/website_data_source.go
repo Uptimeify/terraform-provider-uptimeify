@@ -28,7 +28,7 @@ func (d *websiteDataSource) Schema(ctx context.Context, _ datasource.SchemaReque
 	(&websiteResource{}).Schema(ctx, resource.SchemaRequest{}, &rs)
 	attrs := map[string]dschema.Attribute{}
 	for name, a := range rs.Schema.Attributes {
-		if a.IsWriteOnly() || strings.HasSuffix(name, "_wo_version") {
+		if a.IsWriteOnly() || strings.HasSuffix(name, "_wo_version") || name == "heartbeat_token_rotation" {
 			continue
 		}
 		desc := a.GetDescription()

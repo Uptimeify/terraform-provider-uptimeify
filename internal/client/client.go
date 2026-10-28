@@ -53,6 +53,8 @@ type APIError struct {
 	StatusMessage string
 	Code          string
 	RequestID     string
+	// Data is the full `data` object, e.g. existingPublicId of 409 monitorAlreadyExists.
+	Data map[string]any
 }
 
 func (e *APIError) Error() string {
@@ -67,6 +69,17 @@ func (e *APIError) Error() string {
 		msg += " [requestId " + e.RequestID + "]"
 	}
 	return msg
+}
+
+// ExistingMonitor returns the public id of the monitor a create collided with
+// (409 monitorAlreadyExists), or "" for any other error.
+func ExistingMonitor(err error) string {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusConflict || apiErr.Code != "monitorAlreadyExists" {
+		return ""
+	}
+	id, _ := apiErr.Data["existingPublicId"].(string)
+	return id
 }
 
 // IsNotFound reports whether err is an API 404.
@@ -172,6 +185,12 @@ func parseError(resp *http.Response, body []byte) error {
 			Code      string `json:"code"`
 			RequestID string `json:"requestId"`
 		} `json:"data"`
+	}
+	var raw struct {
+		Data map[string]any `json:"data"`
+	}
+	if json.Unmarshal(body, &raw) == nil {
+		e.Data = raw.Data
 	}
 	if json.Unmarshal(body, &h3) == nil {
 		e.StatusMessage = h3.StatusMessage

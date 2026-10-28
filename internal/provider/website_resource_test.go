@@ -97,10 +97,21 @@ func TestAccWebsite(t *testing.T) {
 	accPreCheck(t)
 	name := fmt.Sprintf("tfacc-web-%d", time.Now().Unix()%1_000_000)
 	url := firstNonEmpty(os.Getenv("UPTIMEIFY_ACC_WEBSITE_URL"), "https://1.1.1.1/")
-	var httpID, hbID string
+	var httpID, hbID, hbToken string
 	saveIDs := func(s *terraform.State) error {
 		httpID = s.RootModule().Resources["uptimeify_website.http"].Primary.ID
 		hbID = s.RootModule().Resources["uptimeify_website.hb"].Primary.ID
+		hbToken = s.RootModule().Resources["uptimeify_website.hb"].Primary.Attributes["heartbeat_token"]
+		return nil
+	}
+	rotated := func(s *terraform.State) error {
+		hb := s.RootModule().Resources["uptimeify_website.hb"].Primary.Attributes
+		if hb["heartbeat_token"] == "" || hb["heartbeat_token"] == hbToken {
+			return fmt.Errorf("heartbeat token not rotated: %q -> %q", hbToken, hb["heartbeat_token"])
+		}
+		if hb["url"] != "heartbeat://"+hb["heartbeat_token"] {
+			return fmt.Errorf("heartbeat url %q does not carry the new token", hb["url"])
+		}
 		return nil
 	}
 	sameID := func(s *terraform.State) error {
@@ -114,6 +125,7 @@ func TestAccWebsite(t *testing.T) {
 	step1 := websiteStep{name: name, url: url, interval: 10, codes: "200", countries: `["DE"]`, method: "POST", headersVer: 1}
 	step2 := step1 // partial mode only
 	step2.name, step2.interval, step2.codes = name+"-2", 15, "200,204"
+	step2.hbRotation = "r1"
 	step3 := step2 // full mode: method, countries, new headers, basic auth
 	step3.method, step3.countries, step3.headersVer, step3.basicAuth = "GET", `["DE", "NL"]`, 2, true
 
@@ -160,12 +172,13 @@ func TestAccWebsite(t *testing.T) {
 					},
 				),
 			},
-			{ // partial PATCH mode
+			{ // partial PATCH mode; heartbeat token rotation
 				Config: step2.config(t) + `
 data "uptimeify_website" "by_id" { id = uptimeify_website.http.public_id }
 `,
 				Check: tfresource.ComposeAggregateTestCheckFunc(
 					sameID,
+					rotated,
 					tfresource.TestCheckResourceAttr(r, "name", name+"-2"),
 					tfresource.TestCheckResourceAttr(r, "check_interval", "15"),
 					tfresource.TestCheckResourceAttr(r, "expected_status_codes", "200,204"),
@@ -219,6 +232,7 @@ type websiteStep struct {
 	name, url, codes, countries, method string
 	interval, headersVer                int
 	basicAuth                           bool
+	hbRotation                          string
 }
 
 func (s websiteStep) config(t *testing.T) string {
@@ -229,6 +243,10 @@ func (s websiteStep) config(t *testing.T) string {
   basic_auth_username    = "tfacc"
   basic_auth_password_wo = "tfacc-secret"
   auth_wo_version        = 1`
+	}
+	rotation := ""
+	if s.hbRotation != "" {
+		rotation = fmt.Sprintf("heartbeat_token_rotation = %q", s.hbRotation)
 	}
 	return accCustomerConfig(t) + fmt.Sprintf(`
 resource "uptimeify_website" "http" {
@@ -261,8 +279,9 @@ resource "uptimeify_website" "hb" {
   status                         = "inactive"
   check_interval                 = 60
   heartbeat_grace_period_minutes = 10
+  %[9]s
 }
-`, s.name, s.url, s.interval, s.method, s.codes, s.countries, s.headersVer, auth)
+`, s.name, s.url, s.interval, s.method, s.codes, s.countries, s.headersVer, auth, rotation)
 }
 
 // accCustomerConfig is the provider block plus data.uptimeify_customer.c: by name from
