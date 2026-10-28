@@ -34,7 +34,7 @@ func (d *websiteDataSource) Schema(ctx context.Context, _ datasource.SchemaReque
 		desc := a.GetDescription()
 		switch t := a.(type) {
 		case rschema.StringAttribute:
-			attrs[name] = dschema.StringAttribute{Computed: true, Description: desc}
+			attrs[name] = dschema.StringAttribute{Computed: true, Sensitive: t.Sensitive, Description: desc}
 		case rschema.Int64Attribute:
 			attrs[name] = dschema.Int64Attribute{Computed: true, Description: desc}
 		case rschema.BoolAttribute:

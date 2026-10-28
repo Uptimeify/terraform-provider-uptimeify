@@ -391,7 +391,7 @@ func (r *websiteResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"domain_expiry_error_days":     optInt("Error this many days before domain expiry.", 7, int64validator.Between(0, 365)),
 			"min_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
 			"max_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
-			"heartbeat_token":              schema.StringAttribute{Computed: true, PlanModifiers: keepS, Description: "Heartbeat monitors: token of the ping URL (server-generated)."},
+			"heartbeat_token":              schema.StringAttribute{Computed: true, Sensitive: true, PlanModifiers: keepS, Description: "Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token."},
 			"heartbeat_grace_period_minutes": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepI,
 				Description: "Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.", Validators: []validator.Int64{int64validator.Between(1, 10080)}},
 			"has_custom_headers": schema.BoolAttribute{Computed: true, Description: "Whether custom headers are stored."},

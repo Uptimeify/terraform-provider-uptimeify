@@ -3,12 +3,12 @@
 page_title: "uptimeify_status_page Resource - uptimeify"
 subcategory: ""
 description: |-
-  A status page of one customer. It shows its components (uptimeify_status_page_component) and, with include_customer_monitors, every monitor of the customer except hidden_monitors. Design, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+  A status page of one customer, or of the whole organization without customer_id. It shows its explicit components (uptimeify_status_page_component, the allowlist) and, only with include_customer_monitors, also every monitor of the customer except hidden_monitors. Design, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 ---
 
 # uptimeify_status_page (Resource)
 
-A status page of one customer. It shows its components (`uptimeify_status_page_component`) and, with `include_customer_monitors`, every monitor of the customer except `hidden_monitors`. Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also every monitor of the customer except `hidden_monitors`. Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 
 ## Example Usage
 
@@ -17,17 +17,24 @@ data "uptimeify_customer" "acme" {
   name = "ACME GmbH"
 }
 
-# Shows every monitor of the customer except the hidden ones.
+# Shows the explicit components and every other monitor of the customer except the hidden ones.
 resource "uptimeify_status_page" "acme" {
-  customer_id = tonumber(data.uptimeify_customer.acme.id)
-  name        = "ACME Status"
-  slug        = "acme"
-  description = "Live status of the ACME shop."
+  customer_id               = tonumber(data.uptimeify_customer.acme.id)
+  name                      = "ACME Status"
+  slug                      = "acme"
+  description               = "Live status of the ACME shop."
+  include_customer_monitors = true
 
   hidden_monitors = [
     { type = "http", id = 1234 },
     { type = "dns", id = 56 },
   ]
+}
+
+# A page of the whole organization: no customer, only the explicit components
+# (uptimeify_status_page_component), which may come from any customer.
+resource "uptimeify_status_page" "platform" {
+  name = "Platform Status"
 }
 
 # Password-protected page; the password never lands in state.
@@ -52,7 +59,6 @@ variable "status_page_password" {
 
 ### Required
 
-- `customer_id` (Number) Customer whose monitors the page shows. Changing it moves the page in place.
 - `name` (String) 1 to 120 characters, no surrounding whitespace.
 
 ### Optional
@@ -61,9 +67,10 @@ variable "status_page_password" {
 
 - `access_password_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Access password, 8 to 200 characters. Write-only: sent on create and whenever `access_password_wo_version` changes; never stored in state. Removing it does not remove the password.
 - `access_password_wo_version` (Number) Change to resend `access_password_wo`.
+- `customer_id` (Number) Customer the page belongs to. Unset = a page of the whole organization (organization-wide tokens and roles only); its components may then come from any customer. Changing or removing it moves the page in place; moving to a customer fails while the page has monitor components of another customer.
 - `description` (String) Up to 1000 characters, no surrounding whitespace.
 - `hidden_monitors` (Attributes Set) Monitors of the customer the page does not show, at most 500. Default: none (every monitor is shown). (see [below for nested schema](#nestedatt--hidden_monitors))
-- `include_customer_monitors` (Boolean) Show every monitor of the customer (minus `hidden_monitors`) after the explicit components (`uptimeify_status_page_component`). `false` = only the components. Default `true`.
+- `include_customer_monitors` (Boolean) Also show every monitor of the customer (minus `hidden_monitors`) after the explicit components (`uptimeify_status_page_component`). `false` = only the components. Unset = the server default at creation (`false` for new pages; older app versions used `true` for pages with a customer), then kept as is.
 - `is_published` (Boolean) Default `true`.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
 - `subscription_delay_minutes` (Number) Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.

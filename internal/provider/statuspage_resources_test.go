@@ -224,8 +224,9 @@ func TestAccStatusPage(t *testing.T) {
 	const r = "uptimeify_status_page.p"
 	var pageID string
 	step1 := statusPageConfig(t, name, name, `
-  description     = "tfacc page"
-  hidden_monitors = [{ type = "dns", id = 999999 }]`)
+  description               = "tfacc page"
+  include_customer_monitors = true
+  hidden_monitors           = [{ type = "dns", id = 999999 }]`)
 	step2 := statusPageConfig(t, name+"-2", name, `
   visibility                 = "password_protected"
   access_password_wo         = "tfacc-password-1"
@@ -275,6 +276,8 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttr(r, "is_published", "false"),
 					tfresource.TestCheckResourceAttr(r, "subscription_delay_minutes", "10"),
 					tfresource.TestCheckResourceAttr(r, "hidden_monitors.#", "2"),
+					// unset after being set: kept as is, no change
+					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "true"),
 				),
 			},
 			{ResourceName: r, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"access_password_wo_version"}},
@@ -290,6 +293,51 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 				ExpectNonEmptyPlan: true,
 			},
 			{Config: step2, Check: spSaveID(r, &pageID)},
+		},
+	})
+}
+
+// A page without customer_id belongs to the organization; attaching and detaching a customer
+// moves it in place.
+func TestAccStatusPageOrganizationWide(t *testing.T) {
+	spAccSkip(t)
+	name := fmt.Sprintf("tfacc-spo-%d", time.Now().UnixNano()%1_000_000)
+	const r = "uptimeify_status_page.p"
+	var pageID string
+	orgPage := fmt.Sprintf(`
+resource "uptimeify_status_page" "p" {
+  name                      = %q
+  slug                      = %q
+  include_customer_monitors = false
+}
+`, name, name)
+	tfresource.Test(t, tfresource.TestCase{
+		PreCheck:                 func() { accPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy:             statusPageGone(&pageID),
+		Steps: []tfresource.TestStep{
+			{
+				Config: orgPage,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					spSaveID(r, &pageID),
+					tfresource.TestCheckNoResourceAttr(r, "customer_id"),
+					tfresource.TestCheckNoResourceAttr(r, "customer_name"),
+					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "false"),
+				),
+			},
+			{ResourceName: r, ImportState: true, ImportStateVerify: true},
+			{
+				Config: statusPageConfig(t, name, name, `include_customer_monitors = false`),
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					spSameID(r, &pageID),
+					tfresource.TestCheckResourceAttrSet(r, "customer_id"),
+					tfresource.TestCheckResourceAttrSet(r, "customer_name"),
+				),
+			},
+			{
+				Config: orgPage,
+				Check:  tfresource.ComposeAggregateTestCheckFunc(spSameID(r, &pageID), tfresource.TestCheckNoResourceAttr(r, "customer_id")),
+			},
 		},
 	})
 }

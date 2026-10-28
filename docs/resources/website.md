@@ -127,7 +127,7 @@ resource "uptimeify_website" "nightly_backup" {
 - `created_at` (String)
 - `has_custom_headers` (Boolean) Whether custom headers are stored.
 - `has_request_body` (Boolean) Whether a request body is stored.
-- `heartbeat_token` (String) Heartbeat monitors: token of the ping URL (server-generated).
+- `heartbeat_token` (String, Sensitive) Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token.
 - `id` (String) Numeric website id.
 - `public_id` (String) Public UUID of the website.
 - `updated_at` (String)

@@ -24,7 +24,7 @@ import (
 func TestOrgSchemasValid(t *testing.T) {
 	ctx := context.Background()
 	for _, f := range []func() resource.Resource{NewOrgUserResource, NewOrgSettingsResource, NewWhitelabelDomainResource,
-		NewReportResource, NewSMTPSettingsResource} {
+		NewReportResource, NewSMTPSettingsResource, NewBrandingResource} {
 		var resp resource.SchemaResponse
 		f().Schema(ctx, resource.SchemaRequest{}, &resp)
 		if d := resp.Schema.ValidateImplementation(ctx); d.HasError() {
