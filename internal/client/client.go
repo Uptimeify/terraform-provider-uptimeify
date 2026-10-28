@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,10 @@ const (
 	maxRetries     = 3
 	maxRetryAfter  = 60 * time.Second
 	baseRetryDelay = time.Second
+	// A website create of the same customer is still running (429 websiteCreationInProgress, e.g.
+	// a parallel `for_each`): wait for it up to this long in total instead of three short tries.
+	creationRetryBudget = 60 * time.Second
+	creationRetryDelay  = 2 * time.Second
 )
 
 // Client talks to one Uptimeify endpoint with one API token
@@ -81,6 +86,7 @@ func (c *Client) Do(ctx context.Context, method, path string, in, out any) error
 	}
 	idempotent := method != http.MethodPost && method != http.MethodPatch
 
+	var slept time.Duration // only counted for websiteCreationInProgress
 	for attempt := 0; ; attempt++ {
 		resp, err := c.send(ctx, method, path, body)
 		if err != nil {
@@ -107,12 +113,21 @@ func (c *Client) Do(ctx context.Context, method, path string, in, out any) error
 			(idempotent && (resp.StatusCode == http.StatusBadGateway ||
 				resp.StatusCode == http.StatusServiceUnavailable ||
 				resp.StatusCode == http.StatusGatewayTimeout))
-		if !retryable || attempt >= maxRetries {
+		inProgress := resp.StatusCode == http.StatusTooManyRequests && errorCode(respBody) == "websiteCreationInProgress"
+		if !retryable || (!inProgress && attempt >= maxRetries) || (inProgress && slept >= creationRetryBudget) {
 			return parseError(resp, respBody)
 		}
 		delay := baseRetryDelay << attempt
+		if inProgress {
+			delay = creationRetryDelay
+		}
 		if d, ok := retryAfter(resp.Header.Get("Retry-After")); ok {
 			delay = d
+		}
+		if inProgress {
+			// Jitter so parallel creates of one customer do not retry in lockstep.
+			delay = min(delay+rand.N(time.Second), creationRetryBudget-slept)
+			slept += delay
 		}
 		if err := c.sleep(ctx, delay); err != nil {
 			return err
@@ -136,6 +151,16 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte) (*h
 		req.Header.Set("Content-Type", "application/json")
 	}
 	return c.http.Do(req)
+}
+
+func errorCode(body []byte) string {
+	var h3 struct {
+		Data struct {
+			Code string `json:"code"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(body, &h3)
+	return h3.Data.Code
 }
 
 func parseError(resp *http.Response, body []byte) error {

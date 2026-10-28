@@ -88,6 +88,31 @@ func TestRetryIsBounded(t *testing.T) {
 	}
 }
 
+// A running website create of the same customer is waited out for up to creationRetryBudget.
+func TestRetryWebsiteCreationInProgress(t *testing.T) {
+	calls := 0
+	c, slept := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "5")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"statusCode":429,"data":{"code":"websiteCreationInProgress"}}`))
+	})
+	_, err := c.CreateTag(context.Background(), TagCreate{Name: "x"})
+	if apiErr, ok := err.(*APIError); !ok || apiErr.Code != "websiteCreationInProgress" {
+		t.Fatalf("got %v", err)
+	}
+	var total time.Duration
+	for _, d := range *slept {
+		if d < 0 || d > 6*time.Second {
+			t.Fatalf("delay %v outside Retry-After + 1s jitter", d)
+		}
+		total += d
+	}
+	if total != creationRetryBudget || calls < 10 || calls != len(*slept)+1 {
+		t.Fatalf("calls=%d total=%v slept=%v", calls, total, *slept)
+	}
+}
+
 func TestNoRetryOf503ForPost(t *testing.T) {
 	calls := 0
 	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
