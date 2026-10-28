@@ -90,6 +90,8 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewImAlertSourceResource,
 		NewImRoutingRuleResource,
 		NewImOrgSettingsResource,
+		NewUserNotificationSettingsResource,
+		NewNotificationTemplateResource,
 		NewImChannelResource,
 		NewImOutboundResource,
 		NewStatusPageResource,

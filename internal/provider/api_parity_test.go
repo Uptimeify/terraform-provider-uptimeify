@@ -61,6 +61,8 @@ var parityEndpoints = map[string]func() resource.Resource{
 	"PATCH /api/ftp-monitors/{id}":      NewFTPMonitorResource,
 	"POST /api/imap-pop-monitors":       NewIMAPPopMonitorResource,
 	"PATCH /api/imap-pop-monitors/{id}": NewIMAPPopMonitorResource,
+	"PUT /api/im/users/{userId}/notification-settings":      NewUserNotificationSettingsResource,
+	"PUT /api/im/notification-template":                     NewNotificationTemplateResource,
 }
 
 // parityAliases maps "<endpoint> <apiField>" (or "* <apiField>" for every endpoint) to the
