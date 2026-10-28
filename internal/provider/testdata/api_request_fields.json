@@ -145,6 +145,18 @@
     "status",
     "timeoutSeconds"
   ],
+  "PATCH /api/status-pages/maintenances/{id}": [
+    "componentIds",
+    "description",
+    "notifyOnComplete",
+    "notifyOnSchedule",
+    "notifyOnStart",
+    "reminderMinutesBefore",
+    "scheduledFor",
+    "scheduledUntil",
+    "statusPageIds",
+    "title"
+  ],
   "PATCH /api/status-pages/{id}": [
     "accessPassword",
     "customerId",
@@ -376,6 +388,18 @@
     "subscriptionDelayMinutes",
     "subscriptionsEnabled",
     "visibility"
+  ],
+  "POST /api/status-pages/maintenances": [
+    "componentIds",
+    "description",
+    "notifyOnComplete",
+    "notifyOnSchedule",
+    "notifyOnStart",
+    "reminderMinutesBefore",
+    "scheduledFor",
+    "scheduledUntil",
+    "statusPageIds",
+    "title"
   ],
   "POST /api/status-pages/{id}/components": [
     "dependencySlug",

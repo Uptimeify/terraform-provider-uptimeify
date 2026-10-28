@@ -32,6 +32,8 @@ var parityEndpoints = map[string]func() resource.Resource{
 	"PATCH /api/status-pages/{id}/components/{componentId}": NewStatusPageComponentResource,
 	"POST /api/status-pages/{id}/groups":                    NewStatusPageComponentGroupResource,
 	"PATCH /api/status-pages/{id}/groups/{groupId}":         NewStatusPageComponentGroupResource,
+	"POST /api/status-pages/maintenances":                   NewStatusPageMaintenanceResource,
+	"PATCH /api/status-pages/maintenances/{id}":             NewStatusPageMaintenanceResource,
 	"POST /api/websites":                                    NewWebsiteResource,
 	"PATCH /api/websites/{id}":                              NewWebsiteResource,
 	"POST /api/customers":                                   NewCustomerResource,

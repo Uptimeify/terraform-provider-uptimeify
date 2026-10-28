@@ -305,3 +305,57 @@ func (c *Client) UpdateStatusPageComponentGroup(ctx context.Context, pageID, id 
 func (c *Client) DeleteStatusPageComponentGroup(ctx context.Context, pageID, id int64) error {
 	return c.Do(ctx, http.MethodDelete, pageSubItemPath(pageID, "groups", id), nil, nil)
 }
+
+// StatusPageMaintenance is GET /api/status-pages/maintenances/{id}: a planned maintenance
+// announced on status pages (not a monitor maintenance window).
+type StatusPageMaintenance struct {
+	ID                    int64   `json:"id"`
+	PublicID              string  `json:"publicId"`
+	Title                 string  `json:"title"`
+	Description           *string `json:"description"`
+	ScheduledFor          string  `json:"scheduledFor"`
+	ScheduledUntil        string  `json:"scheduledUntil"`
+	State                 string  `json:"state"`
+	NotifyOnSchedule      bool    `json:"notifyOnSchedule"`
+	ReminderMinutesBefore *int64  `json:"reminderMinutesBefore"`
+	NotifyOnStart         bool    `json:"notifyOnStart"`
+	NotifyOnComplete      bool    `json:"notifyOnComplete"`
+	CancelledAt           *string `json:"cancelledAt"`
+	StatusPageIDs         []int64 `json:"statusPageIds"`
+	ComponentIDs          []int64 `json:"componentIds"`
+	CreatedAt             string  `json:"createdAt"`
+	UpdatedAt             string  `json:"updatedAt"`
+}
+
+const statusPageMaintenancesPath = "/api/status-pages/maintenances"
+
+func statusPageMaintenancePath(id string) string {
+	return statusPageMaintenancesPath + "/" + url.PathEscape(id)
+}
+
+// GetStatusPageMaintenance takes the numeric id or the public id.
+func (c *Client) GetStatusPageMaintenance(ctx context.Context, id string) (*StatusPageMaintenance, error) {
+	var out StatusPageMaintenance
+	return &out, c.Do(ctx, http.MethodGet, statusPageMaintenancePath(id), nil, &out)
+}
+
+func (c *Client) CreateStatusPageMaintenance(ctx context.Context, body map[string]any) (*StatusPageMaintenance, error) {
+	var out StatusPageMaintenance
+	return &out, c.Do(ctx, http.MethodPost, statusPageMaintenancesPath, body, &out)
+}
+
+func (c *Client) UpdateStatusPageMaintenance(ctx context.Context, id string, patch map[string]any) (*StatusPageMaintenance, error) {
+	var out StatusPageMaintenance
+	return &out, c.Do(ctx, http.MethodPatch, statusPageMaintenancePath(id), patch, &out)
+}
+
+func (c *Client) DeleteStatusPageMaintenance(ctx context.Context, id string) error {
+	return c.Do(ctx, http.MethodDelete, statusPageMaintenancePath(id), nil, nil)
+}
+
+// CancelStatusPageMaintenance cancels an upcoming maintenance (tests and drift only; the
+// resource does not model lifecycle actions).
+func (c *Client) CancelStatusPageMaintenance(ctx context.Context, id string) (*StatusPageMaintenance, error) {
+	var out StatusPageMaintenance
+	return &out, c.Do(ctx, http.MethodPost, statusPageMaintenancePath(id)+"/cancel", map[string]any{}, &out)
+}
