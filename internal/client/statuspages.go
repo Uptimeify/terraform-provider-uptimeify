@@ -30,8 +30,8 @@ type StatusPage struct {
 	ID                       int64        `json:"id"`
 	PublicID                 string       `json:"publicId"`
 	OrganizationID           int64        `json:"organizationId"`
-	CustomerID               int64        `json:"customerId"`
-	CustomerName             string       `json:"customerName"`
+	CustomerID               *int64       `json:"customerId"` // null: page of the whole organization
+	CustomerName             *string      `json:"customerName"`
 	Name                     string       `json:"name"`
 	Slug                     string       `json:"slug"`
 	Description              *string      `json:"description"`

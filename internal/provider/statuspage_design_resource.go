@@ -173,13 +173,18 @@ func (r *statusPageDesignResource) Schema(_ context.Context, _ resource.SchemaRe
 	resp.Schema = schema.Schema{
 		Description: "The design of one status page (one per page). Unset arguments keep their current value; removing an " +
 			"argument from the configuration does not reset it. Destroying the resource resets the whole design to the " +
-			"defaults. Import with the numeric status page id.",
+			"defaults. Every option with examples: [Status page design](https://docs.uptimeify.io/status-pages/design). " +
+			"Import with the numeric status page id.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keepS, Description: "Same as `status_page_id`."},
 			"status_page_id": schema.Int64Attribute{Required: true, Description: "Numeric status page id. Changing it replaces the resource.",
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
 				Validators:    []validator.Int64{int64validator.AtLeast(1)}},
-			"layout": enum("`classic`, `cards`, `minimal`, `sleek`, `board`, `split`, `timeline`, `compact` or `statusboard` (default).",
+			"layout": enum("Layout preset, with its name and caption in the design editor: `classic` (Classic, card and list), "+
+				"`cards` (Cards, service grid), `minimal` (Minimal, clean lines), `sleek` (Sleek, dark with glow), "+
+				"`board` (Board, color rows), `split` (Split, two columns), `timeline` (Timeline, event feed), "+
+				"`compact` (Compact, dense table) or `statusboard` (Statusboard, uptime bars; the default). All show the "+
+				"same data. Descriptions and screenshots: [Status page design](https://docs.uptimeify.io/status-pages/design#layouts).",
 				"classic", "cards", "minimal", "sleek", "board", "split", "timeline", "compact", "statusboard"),
 			"color_scheme": enum("`light`, `dark` or `auto` (default).", "light", "dark", "auto"),
 			"accent_color": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: keepS,

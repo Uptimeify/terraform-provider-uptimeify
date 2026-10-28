@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -79,8 +80,8 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 	m.ID = types.StringValue(strconv.FormatInt(p.ID, 10))
 	m.PublicID = types.StringValue(p.PublicID)
 	m.OrganizationID = types.Int64Value(p.OrganizationID)
-	m.CustomerID = types.Int64Value(p.CustomerID)
-	m.CustomerName = types.StringValue(p.CustomerName)
+	m.CustomerID = types.Int64PointerValue(p.CustomerID)
+	m.CustomerName = types.StringPointerValue(p.CustomerName)
 	m.Name = types.StringValue(p.Name)
 	m.Slug = types.StringValue(p.Slug)
 	m.Description = types.StringPointerValue(p.Description)
@@ -121,8 +122,9 @@ func (r *statusPageResource) Metadata(_ context.Context, req resource.MetadataRe
 func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	resp.Schema = schema.Schema{
-		Description: "A status page of one customer. It shows its components (`uptimeify_status_page_component`) and, with " +
-			"`include_customer_monitors`, every monitor of the customer except `hidden_monitors`. " +
+		Description: "A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit " +
+			"components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also " +
+			"every monitor of the customer except `hidden_monitors`. " +
 			"Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, " +
 			"`uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. " +
 			"Import with the numeric id or the public id.",
@@ -130,7 +132,10 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"id":              schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Numeric status page id."},
 			"public_id":       schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Public UUID of the page."},
 			"organization_id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
-			"customer_id": schema.Int64Attribute{Required: true, Description: "Customer whose monitors the page shows. Changing it moves the page in place.",
+			"customer_id": schema.Int64Attribute{Optional: true, Description: "Customer the page belongs to. Unset = a page of the " +
+				"whole organization (organization-wide tokens and roles only); its components may then come from any customer. " +
+				"Changing or removing it moves the page in place; moving to a customer fails while the page has monitor " +
+				"components of another customer.",
 				Validators: []validator.Int64{int64validator.AtLeast(1)}},
 			"customer_name": schema.StringAttribute{Computed: true},
 			"name": schema.StringAttribute{Required: true, Description: "1 to 120 characters, no surrounding whitespace.",
@@ -160,9 +165,11 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"subscription_delay_minutes": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(5),
 				Description: "Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.",
 				Validators:  []validator.Int64{int64validator.Between(1, 120)}},
-			"include_customer_monitors": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
-				Description: "Show every monitor of the customer (minus `hidden_monitors`) after the explicit components " +
-					"(`uptimeify_status_page_component`). `false` = only the components. Default `true`."},
+			"include_customer_monitors": schema.BoolAttribute{Optional: true, Computed: true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+				Description: "Also show every monitor of the customer (minus `hidden_monitors`) after the explicit components " +
+					"(`uptimeify_status_page_component`). `false` = only the components. Unset = the server default at creation " +
+					"(`false` for new pages; older app versions used `true` for pages with a customer), then kept as is."},
 			"hidden_monitors": schema.SetNestedAttribute{
 				Optional: true, Computed: true,
 				Default:     setdefault.StaticValue(types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil)),
@@ -195,14 +202,18 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	body := map[string]any{
-		"customerId":               plan.CustomerID.ValueInt64(),
 		"name":                     plan.Name.ValueString(),
 		"visibility":               plan.Visibility.ValueString(),
 		"isPublished":              plan.IsPublished.ValueBool(),
 		"subscriptionsEnabled":     plan.SubscriptionsEnabled.ValueBool(),
 		"subscriptionDelayMinutes": plan.SubscriptionDelayMinutes.ValueInt64(),
-		"includeCustomerMonitors":  plan.IncludeCustomerMonitors.ValueBool(),
 		"hiddenMonitors":           hiddenMonitorsToAPI(ctx, plan.HiddenMonitors),
+	}
+	if !plan.CustomerID.IsNull() { // omitted (create refuses null) = page of the organization
+		body["customerId"] = plan.CustomerID.ValueInt64()
+	}
+	if !plan.IncludeCustomerMonitors.IsUnknown() { // unset: the server default for new pages
+		body["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
 	}
 	wantSlug := !plan.Slug.IsUnknown() && !plan.Slug.IsNull()
 	if wantSlug {
@@ -271,7 +282,7 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	patch := map[string]any{}
 	if !plan.CustomerID.Equal(state.CustomerID) {
-		patch["customerId"] = plan.CustomerID.ValueInt64()
+		patch["customerId"] = plan.CustomerID.ValueInt64Pointer() // nil detaches it from the customer
 	}
 	if !plan.Name.Equal(state.Name) {
 		patch["name"] = plan.Name.ValueString()
@@ -294,7 +305,7 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	if !plan.SubscriptionDelayMinutes.Equal(state.SubscriptionDelayMinutes) {
 		patch["subscriptionDelayMinutes"] = plan.SubscriptionDelayMinutes.ValueInt64()
 	}
-	if !plan.IncludeCustomerMonitors.Equal(state.IncludeCustomerMonitors) {
+	if !plan.IncludeCustomerMonitors.IsUnknown() && !plan.IncludeCustomerMonitors.Equal(state.IncludeCustomerMonitors) {
 		patch["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
 	}
 	if !plan.HiddenMonitors.Equal(state.HiddenMonitors) {

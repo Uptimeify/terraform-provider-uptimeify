@@ -3,12 +3,12 @@
 page_title: "uptimeify_status_page_design Resource - uptimeify"
 subcategory: ""
 description: |-
-  The design of one status page (one per page). Unset arguments keep their current value; removing an argument from the configuration does not reset it. Destroying the resource resets the whole design to the defaults. Import with the numeric status page id.
+  The design of one status page (one per page). Unset arguments keep their current value; removing an argument from the configuration does not reset it. Destroying the resource resets the whole design to the defaults. Every option with examples: Status page design https://docs.uptimeify.io/status-pages/design. Import with the numeric status page id.
 ---
 
 # uptimeify_status_page_design (Resource)
 
-The design of one status page (one per page). Unset arguments keep their current value; removing an argument from the configuration does not reset it. Destroying the resource resets the whole design to the defaults. Import with the numeric status page id.
+The design of one status page (one per page). Unset arguments keep their current value; removing an argument from the configuration does not reset it. Destroying the resource resets the whole design to the defaults. Every option with examples: [Status page design](https://docs.uptimeify.io/status-pages/design). Import with the numeric status page id.
 
 ## Example Usage
 
@@ -45,7 +45,7 @@ resource "uptimeify_status_page_design" "acme" {
 - `history_days` (Number) Window of the availability bars, 1 to 3650 days. Default `30`.
 - `incident_days` (Number) 1 to 3650 days. Default `30`.
 - `incident_limit` (Number) 1 to 50 incidents. Default `5`.
-- `layout` (String) `classic`, `cards`, `minimal`, `sleek`, `board`, `split`, `timeline`, `compact` or `statusboard` (default).
+- `layout` (String) Layout preset, with its name and caption in the design editor: `classic` (Classic, card and list), `cards` (Cards, service grid), `minimal` (Minimal, clean lines), `sleek` (Sleek, dark with glow), `board` (Board, color rows), `split` (Split, two columns), `timeline` (Timeline, event feed), `compact` (Compact, dense table) or `statusboard` (Statusboard, uptime bars; the default). All show the same data. Descriptions and screenshots: [Status page design](https://docs.uptimeify.io/status-pages/design#layouts).
 - `maintenance_days` (Number) How far back past maintenance is shown, 1 to 3650 days. Default `30`.
 - `maintenance_limit` (Number) 1 to 50 maintenance windows. Default `5`.
 - `page_width` (String) `sm`, `md`, `lg` (default) or `xl`.
