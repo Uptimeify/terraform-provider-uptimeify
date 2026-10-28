@@ -101,7 +101,7 @@ Everything the Uptimeify API allows an API token to change: 44 resources and 25 
 | Organizing | `tag`, `monitor_tag`, `custom_field`, `maintenance_window` |
 | Alerting | `notification_channel`, `escalation_config` |
 | Customers | `customer`, `customer_ip`, `customer_domain` |
-| Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings` |
+| Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings`, `user_notification_settings`, `notification_template` |
 | Status pages | `status_page`, `status_page_design`, `status_page_component`, `status_page_component_group`, `status_page_maintenance`, `status_page_domain`, `status_page_domain_activation` |
 | Organization | `organization_settings`, `organization_branding`, `whitelabel_domain`, `report`, `smtp_settings`, `user`, `sso_oidc`, `sso_domain_verification` |
 

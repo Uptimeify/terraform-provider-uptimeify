@@ -494,5 +494,14 @@
     "status",
     "timeoutSeconds",
     "url"
+  ],
+  "PUT /api/im/notification-template": [
+    "channels",
+    "rules"
+  ],
+  "PUT /api/im/users/{userId}/notification-settings": [
+    "channels",
+    "phoneNumber",
+    "rules"
   ]
 }
