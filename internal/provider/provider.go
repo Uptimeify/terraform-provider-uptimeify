@@ -104,6 +104,7 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewWhitelabelDomainResource,
 		NewReportResource,
 		NewSMTPSettingsResource,
+		NewBrandingResource,
 		NewCustomerResource,
 		NewCustomerIPResource,
 		NewCustomerDomainResource,
