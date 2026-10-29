@@ -43,6 +43,8 @@ output "acme_status_txt" {
 
 - `created_at` (String)
 - `id` (String) Numeric domain id.
+- `last_verification_error` (String) JSON diagnosis of the last failed TXT verification (`recordName`, `expected`, `lookup`, `observed`, `nameservers`, `authoritative`, `propagation`), decode with `jsondecode()`; null when the last verification succeeded or none failed yet.
+- `last_verification_error_at` (String) When `last_verification_error` happened (RFC 3339).
 - `status` (String) `pending`, `verified` or `active`.
 - `verification_record` (Attributes) DNS TXT record that proves control of the hostname. (see [below for nested schema](#nestedatt--verification_record))
 - `verified_at` (String)

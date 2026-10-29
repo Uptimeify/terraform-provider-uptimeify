@@ -38,6 +38,8 @@ output "txt_record" {
 - `dns_txt_value` (String) Value of the TXT record.
 - `id` (String) Numeric domain id (`domainId`).
 - `is_primary` (Boolean) The first app domain becomes primary.
+- `last_verification_error` (String) JSON diagnosis of the last failed TXT verification (`recordName`, `expected`, `lookup`, `observed`, `nameservers`, `authoritative`, `propagation`), decode with `jsondecode()`; null when the last verification succeeded or none failed yet.
+- `last_verification_error_at` (String) When `last_verification_error` happened (RFC 3339).
 - `status` (String) `pending`, `verified` or `active`.
 - `verified_at` (String)
 

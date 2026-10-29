@@ -25,14 +25,16 @@ var (
 type whitelabelDomainResource struct{ client *client.Client }
 
 type whitelabelDomainModel struct {
-	ID          types.String `tfsdk:"id"`
-	Hostname    types.String `tfsdk:"hostname"`
-	Status      types.String `tfsdk:"status"`
-	IsPrimary   types.Bool   `tfsdk:"is_primary"`
-	VerifiedAt  types.String `tfsdk:"verified_at"`
-	CreatedAt   types.String `tfsdk:"created_at"`
-	DNSTxtName  types.String `tfsdk:"dns_txt_name"`
-	DNSTxtValue types.String `tfsdk:"dns_txt_value"`
+	ID                types.String `tfsdk:"id"`
+	Hostname          types.String `tfsdk:"hostname"`
+	Status            types.String `tfsdk:"status"`
+	IsPrimary         types.Bool   `tfsdk:"is_primary"`
+	VerifiedAt        types.String `tfsdk:"verified_at"`
+	CreatedAt         types.String `tfsdk:"created_at"`
+	DNSTxtName        types.String `tfsdk:"dns_txt_name"`
+	DNSTxtValue       types.String `tfsdk:"dns_txt_value"`
+	LastVerifyError   types.String `tfsdk:"last_verification_error"`
+	LastVerifyErrorAt types.String `tfsdk:"last_verification_error_at"`
 }
 
 func (m *whitelabelDomainModel) fromAPI(d *client.WhitelabelDomain) {
@@ -47,6 +49,8 @@ func (m *whitelabelDomainModel) fromAPI(d *client.WhitelabelDomain) {
 	m.CreatedAt = types.StringValue(d.Domain.CreatedAt)
 	m.DNSTxtName = types.StringValue(d.DNS.TxtName)
 	m.DNSTxtValue = types.StringValue(d.DNS.TxtValue)
+	m.LastVerifyError = rawJSONOrNull(d.Domain.LastVerificationError)
+	m.LastVerifyErrorAt = types.StringPointerValue(d.Domain.LastVerificationErrorAt)
 }
 
 func NewWhitelabelDomainResource() resource.Resource { return &whitelabelDomainResource{} }
@@ -68,12 +72,14 @@ func (r *whitelabelDomainResource) Schema(_ context.Context, _ resource.SchemaRe
 			"hostname": schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators:  []validator.String{stringvalidator.LengthBetween(3, 253)},
 				Description: "Hostname, e.g. `status.example.com`. No wildcards, no platform hostnames."},
-			"status":        schema.StringAttribute{Computed: true, Description: "`pending`, `verified` or `active`."},
-			"is_primary":    schema.BoolAttribute{Computed: true, Description: "The first app domain becomes primary."},
-			"verified_at":   schema.StringAttribute{Computed: true},
-			"created_at":    schema.StringAttribute{Computed: true, PlanModifiers: keep},
-			"dns_txt_name":  schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Name of the TXT record to publish."},
-			"dns_txt_value": schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Value of the TXT record."},
+			"status":                     schema.StringAttribute{Computed: true, Description: "`pending`, `verified` or `active`."},
+			"is_primary":                 schema.BoolAttribute{Computed: true, Description: "The first app domain becomes primary."},
+			"verified_at":                schema.StringAttribute{Computed: true},
+			"created_at":                 schema.StringAttribute{Computed: true, PlanModifiers: keep},
+			"dns_txt_name":               schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Name of the TXT record to publish."},
+			"dns_txt_value":              schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Value of the TXT record."},
+			"last_verification_error":    lastVerificationErrorAttr(),
+			"last_verification_error_at": lastVerificationErrorAtAttr(),
 		},
 	}
 }
