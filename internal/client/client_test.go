@@ -48,6 +48,25 @@ func TestErrorFormAndNotFound(t *testing.T) {
 	}
 }
 
+// A 400 invalidRequestBody names the fields in data.issues; the diagnostic must show them,
+// otherwise the user only reads "Invalid request body" and has to guess which attribute is wrong.
+func TestValidationIssuesInError(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"statusCode":400,"statusMessage":"Invalid request body","data":{"code":"invalidRequestBody",` +
+			`"issues":[{"path":"config.port","message":"Expected number"},{"path":"","message":"Unrecognized key"}],"requestId":"req-2"}}`))
+	})
+	_, err := c.GetTag(context.Background(), "1")
+	apiErr, ok := err.(*APIError)
+	if !ok || len(apiErr.Issues) != 2 || apiErr.Issues[0].Path != "config.port" {
+		t.Fatalf("got %#v", err)
+	}
+	want := "uptimeify API: HTTP 400 Invalid request body (code invalidRequestBody) [requestId req-2]\n  - config.port: Expected number\n  - Unrecognized key"
+	if err.Error() != want {
+		t.Fatalf("Error() = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestRetry429ThenSuccess(t *testing.T) {
 	calls := 0
 	c, slept := testClient(t, func(w http.ResponseWriter, r *http.Request) {
