@@ -3,12 +3,12 @@
 page_title: "uptimeify_status_page Resource - uptimeify"
 subcategory: ""
 description: |-
-  A status page of one customer, or of the whole organization without customer_id. It shows its explicit components (uptimeify_status_page_component, the allowlist) and, only with include_customer_monitors, also every monitor of the customer except hidden_monitors. Design, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+  A status page of one customer, or of the whole organization without customer_id. It shows its explicit components (uptimeify_status_page_component, the allowlist) and, only with include_customer_monitors, also every monitor of the customer except hidden_monitors. Design, audience groups, custom domain and IM rules are separate resources (uptimeify_status_page_design, uptimeify_status_page_audience_groups, uptimeify_status_page_domain, uptimeify_im_statuspage_rule). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 ---
 
 # uptimeify_status_page (Resource)
 
-A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also every monitor of the customer except `hidden_monitors`. Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
+A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also every monitor of the customer except `hidden_monitors`. Design, audience groups, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, `uptimeify_status_page_audience_groups`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. Import with the numeric id or the public id.
 
 ## Example Usage
 
@@ -32,9 +32,20 @@ resource "uptimeify_status_page" "acme" {
 }
 
 # A page of the whole organization: no customer, only the explicit components
-# (uptimeify_status_page_component), which may come from any customer.
+# (uptimeify_status_page_component), which may come from any customer. Visitors may also
+# subscribe by SMS and browser push.
 resource "uptimeify_status_page" "platform" {
-  name = "Platform Status"
+  name                       = "Platform Status"
+  sms_subscriptions_enabled  = true
+  push_subscriptions_enabled = true
+}
+
+# Internal page: only members signed in through the organization's single sign-on, and only
+# from the office networks.
+resource "uptimeify_status_page" "staff" {
+  name         = "Staff Status"
+  visibility   = "sso_members_only"
+  ip_allowlist = ["203.0.113.0/24", "2001:db8::/32"]
 }
 
 # Password-protected page; the password never lands in state.
@@ -71,11 +82,14 @@ variable "status_page_password" {
 - `description` (String) Up to 1000 characters, no surrounding whitespace.
 - `hidden_monitors` (Attributes Set) Monitors of the customer the page does not show, at most 500. Default: none (every monitor is shown). (see [below for nested schema](#nestedatt--hidden_monitors))
 - `include_customer_monitors` (Boolean) Also show every monitor of the customer (minus `hidden_monitors`) after the explicit components (`uptimeify_status_page_component`). `false` = only the components. Unset = the server default at creation (`false` for new pages; older app versions used `true` for pages with a customer), then kept as is.
+- `ip_allowlist` (Set of String) Only visitors from these networks see the page (403 for everyone else), on top of `visibility`. CIDR ranges with explicit prefix and lowercase address (`203.0.113.0/24`, `203.0.113.5/32`, `2001:db8::/32`), at most 50. Default: none (no IP restriction). A page with a list has no badge, widget, feeds or subscriptions.
 - `is_published` (Boolean) Default `true`.
+- `push_subscriptions_enabled` (Boolean) Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
+- `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota.
 - `subscription_delay_minutes` (Number) Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.
 - `subscriptions_enabled` (Boolean) Visitors may subscribe to e-mail updates. Default `true`.
-- `visibility` (String) `public` (default), `customer_members_only` or `password_protected`. `password_protected` needs a password: set `access_password_wo`, or keep one set earlier.
+- `visibility` (String) `public` (default), `customer_members_only`, `password_protected` or `sso_members_only`. `password_protected` needs a password: set `access_password_wo`, or keep one set earlier. `sso_members_only` is `customer_members_only` plus a session from the organization's single sign-on (`uptimeify_sso_oidc`); without verified SSO the API refuses it (`ssoNotConfigured`).
 
 ### Read-Only
 

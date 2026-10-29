@@ -22,6 +22,12 @@ resource "uptimeify_status_page_design" "acme" {
   show_powered_by = false
   history_days    = 90
   incident_limit  = 10
+
+  # Own texts for the states; states left out show the default text.
+  status_labels = {
+    operational  = "All systems go"
+    major_outage = "We are on it"
+  }
 }
 ```
 
@@ -56,6 +62,7 @@ resource "uptimeify_status_page_design" "acme" {
 - `show_powered_by` (Boolean) Default `true`.
 - `show_service_urls` (Boolean) Show monitor URLs. Default `false`.
 - `show_uptime_stats` (Boolean) Default `true`.
+- `status_labels` (Map of String) Own public texts per state, used by every layout, the badge and the widget. Keys: `operational`, `degraded`, `partial_outage`, `major_outage`, `maintenance`; values 1 to 40 characters, no surrounding whitespace. When set, the map is the complete list: a state left out shows its default text.
 
 ### Read-Only
 

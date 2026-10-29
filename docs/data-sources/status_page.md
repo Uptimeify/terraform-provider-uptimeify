@@ -41,13 +41,16 @@ data "uptimeify_status_page" "by_id" {
 - `has_password` (Boolean)
 - `hidden_monitors` (Attributes Set) Monitors of the customer the page does not show. (see [below for nested schema](#nestedatt--hidden_monitors))
 - `include_customer_monitors` (Boolean) Every monitor of the customer appears after the components.
+- `ip_allowlist` (Set of String) CIDR ranges allowed to see the page; empty = no IP restriction.
 - `is_published` (Boolean)
 - `organization_id` (Number)
 - `public_id` (String)
+- `push_subscriptions_enabled` (Boolean)
+- `sms_subscriptions_enabled` (Boolean)
 - `subscription_delay_minutes` (Number)
 - `subscriptions_enabled` (Boolean)
 - `updated_at` (String)
-- `visibility` (String) `public`, `customer_members_only` or `password_protected`.
+- `visibility` (String) `public`, `customer_members_only`, `password_protected` or `sso_members_only`.
 
 <a id="nestedatt--hidden_monitors"></a>
 ### Nested Schema for `hidden_monitors`

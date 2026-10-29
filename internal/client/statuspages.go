@@ -12,7 +12,7 @@ import (
 
 // StatusPageVisibilities and MonitorKinds mirror the API contract enums.
 var (
-	StatusPageVisibilities = []string{"public", "customer_members_only", "password_protected"}
+	StatusPageVisibilities = []string{"public", "customer_members_only", "password_protected", "sso_members_only"}
 	MonitorKinds           = []string{"http", "dns", "icmp", "smtp", "ssh", "tcp", "ftp", "imap_pop"}
 	StatusPageTargetStates = []string{"warning", "degraded"}
 	// ComponentSourceKinds and ComponentManualStatuses mirror createStatusPageComponentSchema.
@@ -25,26 +25,38 @@ type MonitorRef struct {
 	ID   int64  `json:"id"`
 }
 
+// AudienceGroup is one entry of audienceGroups (0328): components only visitors with a verified
+// email of one of the domains see. componentIds come back numeric.
+type AudienceGroup struct {
+	Name         string   `json:"name"`
+	EmailDomains []string `json:"emailDomains"`
+	ComponentIDs []int64  `json:"componentIds"`
+}
+
 // StatusPage is statusPageView of GET /api/status-pages/{id}.
 type StatusPage struct {
-	ID                       int64        `json:"id"`
-	PublicID                 string       `json:"publicId"`
-	OrganizationID           int64        `json:"organizationId"`
-	CustomerID               *int64       `json:"customerId"` // null: page of the whole organization
-	CustomerName             *string      `json:"customerName"`
-	Name                     string       `json:"name"`
-	Slug                     string       `json:"slug"`
-	Description              *string      `json:"description"`
-	Visibility               string       `json:"visibility"`
-	IsPublished              bool         `json:"isPublished"`
-	SubscriptionsEnabled     bool         `json:"subscriptionsEnabled"`
-	SubscriptionDelayMinutes int64        `json:"subscriptionDelayMinutes"`
-	IncludeCustomerMonitors  bool         `json:"includeCustomerMonitors"`
-	HiddenMonitors           []MonitorRef `json:"hiddenMonitors"`
-	HasPassword              bool         `json:"hasPassword"`
-	AccessPasswordSetAt      *string      `json:"accessPasswordSetAt"`
-	CreatedAt                string       `json:"createdAt"`
-	UpdatedAt                string       `json:"updatedAt"`
+	ID                       int64           `json:"id"`
+	PublicID                 string          `json:"publicId"`
+	OrganizationID           int64           `json:"organizationId"`
+	CustomerID               *int64          `json:"customerId"` // null: page of the whole organization
+	CustomerName             *string         `json:"customerName"`
+	Name                     string          `json:"name"`
+	Slug                     string          `json:"slug"`
+	Description              *string         `json:"description"`
+	Visibility               string          `json:"visibility"`
+	IsPublished              bool            `json:"isPublished"`
+	SubscriptionsEnabled     bool            `json:"subscriptionsEnabled"`
+	SubscriptionDelayMinutes int64           `json:"subscriptionDelayMinutes"`
+	IncludeCustomerMonitors  bool            `json:"includeCustomerMonitors"`
+	HiddenMonitors           []MonitorRef    `json:"hiddenMonitors"`
+	SMSSubscriptionsEnabled  bool            `json:"smsSubscriptionsEnabled"`
+	PushSubscriptionsEnabled bool            `json:"pushSubscriptionsEnabled"`
+	IPAllowlist              []string        `json:"ipAllowlist"`
+	AudienceGroups           []AudienceGroup `json:"audienceGroups"`
+	HasPassword              bool            `json:"hasPassword"`
+	AccessPasswordSetAt      *string         `json:"accessPasswordSetAt"`
+	CreatedAt                string          `json:"createdAt"`
+	UpdatedAt                string          `json:"updatedAt"`
 }
 
 func statusPagePath(id string) string { return "/api/status-pages/" + url.PathEscape(id) }
@@ -106,6 +118,9 @@ type StatusPageDesign struct {
 	MaintenanceLimit int64  `json:"maintenanceLimit"`
 	MaintenanceDays  int64  `json:"maintenanceDays"`
 	CustomCSS        string `json:"customCss"`
+	// StatusLabels: own texts per state (operational, degraded, partialOutage, majorOutage,
+	// maintenance); a state without own text is absent.
+	StatusLabels map[string]string `json:"statusLabels"`
 }
 
 type designEnvelope struct {

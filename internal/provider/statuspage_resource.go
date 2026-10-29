@@ -3,8 +3,10 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -64,6 +66,9 @@ type statusPageModel struct {
 	SubscriptionDelayMinutes types.Int64  `tfsdk:"subscription_delay_minutes"`
 	IncludeCustomerMonitors  types.Bool   `tfsdk:"include_customer_monitors"`
 	HiddenMonitors           types.Set    `tfsdk:"hidden_monitors"`
+	SMSSubscriptionsEnabled  types.Bool   `tfsdk:"sms_subscriptions_enabled"`
+	PushSubscriptionsEnabled types.Bool   `tfsdk:"push_subscriptions_enabled"`
+	IPAllowlist              types.Set    `tfsdk:"ip_allowlist"`
 	HasPassword              types.Bool   `tfsdk:"has_password"`
 	AccessPasswordSetAt      types.String `tfsdk:"access_password_set_at"`
 	CreatedAt                types.String `tfsdk:"created_at"`
@@ -96,6 +101,13 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 			"type": types.StringValue(h.Type), "id": types.Int64Value(h.ID)}))
 	}
 	m.HiddenMonitors = types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, elems)
+	m.SMSSubscriptionsEnabled = types.BoolValue(p.SMSSubscriptionsEnabled)
+	m.PushSubscriptionsEnabled = types.BoolValue(p.PushSubscriptionsEnabled)
+	cidrs := []attr.Value{} // never null: the attribute defaults to an empty set
+	for _, c := range p.IPAllowlist {
+		cidrs = append(cidrs, types.StringValue(c))
+	}
+	m.IPAllowlist = types.SetValueMust(types.StringType, cidrs)
 	m.HasPassword = types.BoolValue(p.HasPassword)
 	m.AccessPasswordSetAt = types.StringPointerValue(p.AccessPasswordSetAt)
 	m.CreatedAt = types.StringValue(p.CreatedAt)
@@ -113,6 +125,31 @@ func hiddenMonitorsToAPI(ctx context.Context, s types.Set) []client.MonitorRef {
 	return out
 }
 
+func stringsOf(ctx context.Context, s types.Set) []string {
+	out := []string{}
+	s.ElementsAs(ctx, &out, false)
+	return out
+}
+
+// cidrValidator accepts what the API stores unchanged: "addr/prefix" with a lowercase address.
+// The API normalizes "203.0.113.5" to "203.0.113.5/32" and upper case to lower case; requiring
+// that form keeps state equal to the configuration.
+type cidrValidator struct{}
+
+func (cidrValidator) Description(context.Context) string {
+	return "must be an IPv4/IPv6 CIDR range with explicit prefix and a lowercase address, e.g. 203.0.113.0/24 or 2001:db8::/32"
+}
+func (v cidrValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
+func (v cidrValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	s := req.ConfigValue.ValueString()
+	if _, err := netip.ParsePrefix(s); err != nil || s != strings.ToLower(s) || strings.Contains(s, "%") {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid CIDR range", fmt.Sprintf("%q %s.", s, v.Description(ctx)))
+	}
+}
+
 func NewStatusPageResource() resource.Resource { return &statusPageResource{} }
 
 func (r *statusPageResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -125,8 +162,8 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit " +
 			"components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also " +
 			"every monitor of the customer except `hidden_monitors`. " +
-			"Design, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, " +
-			"`uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. " +
+			"Design, audience groups, custom domain and IM rules are separate resources (`uptimeify_status_page_design`, " +
+			"`uptimeify_status_page_audience_groups`, `uptimeify_status_page_domain`, `uptimeify_im_statuspage_rule`). Deleting the page also deletes its custom domain. " +
 			"Import with the numeric id or the public id.",
 		Attributes: map[string]schema.Attribute{
 			"id":              schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Numeric status page id."},
@@ -148,8 +185,10 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"description": schema.StringAttribute{Optional: true, Description: "Up to 1000 characters, no surrounding whitespace.",
 				Validators: []validator.String{stringvalidator.LengthAtMost(1000), statusPageTrimmed}},
 			"visibility": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("public"),
-				Description: "`public` (default), `customer_members_only` or `password_protected`. `password_protected` needs a " +
-					"password: set `access_password_wo`, or keep one set earlier.",
+				Description: "`public` (default), `customer_members_only`, `password_protected` or `sso_members_only`. " +
+					"`password_protected` needs a password: set `access_password_wo`, or keep one set earlier. `sso_members_only` " +
+					"is `customer_members_only` plus a session from the organization's single sign-on (`uptimeify_sso_oidc`); " +
+					"without verified SSO the API refuses it (`ssoNotConfigured`).",
 				Validators: []validator.String{stringvalidator.OneOf(client.StatusPageVisibilities...)}},
 			"access_password_wo": schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true,
 				Description: "Access password, 8 to 200 characters. Write-only: sent on create and whenever " +
@@ -182,6 +221,16 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 						Validators: []validator.Int64{int64validator.AtLeast(1)}},
 				}},
 			},
+			"sms_subscriptions_enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
+				Description: "Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota."},
+			"push_subscriptions_enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
+				Description: "Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform."},
+			"ip_allowlist": schema.SetAttribute{ElementType: types.StringType, Optional: true, Computed: true,
+				Default: setdefault.StaticValue(types.SetValueMust(types.StringType, nil)),
+				Description: "Only visitors from these networks see the page (403 for everyone else), on top of `visibility`. " +
+					"CIDR ranges with explicit prefix and lowercase address (`203.0.113.0/24`, `203.0.113.5/32`, `2001:db8::/32`), " +
+					"at most 50. Default: none (no IP restriction). A page with a list has no badge, widget, feeds or subscriptions.",
+				Validators: []validator.Set{setvalidator.SizeAtMost(50), setvalidator.ValueStringsAre(cidrValidator{})}},
 			"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keep},
 			"updated_at": schema.StringAttribute{Computed: true},
 		},
@@ -208,6 +257,9 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 		"subscriptionsEnabled":     plan.SubscriptionsEnabled.ValueBool(),
 		"subscriptionDelayMinutes": plan.SubscriptionDelayMinutes.ValueInt64(),
 		"hiddenMonitors":           hiddenMonitorsToAPI(ctx, plan.HiddenMonitors),
+		"smsSubscriptionsEnabled":  plan.SMSSubscriptionsEnabled.ValueBool(),
+		"pushSubscriptionsEnabled": plan.PushSubscriptionsEnabled.ValueBool(),
+		"ipAllowlist":              stringsOf(ctx, plan.IPAllowlist),
 	}
 	if !plan.CustomerID.IsNull() { // omitted (create refuses null) = page of the organization
 		body["customerId"] = plan.CustomerID.ValueInt64()
@@ -310,6 +362,15 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	if !plan.HiddenMonitors.Equal(state.HiddenMonitors) {
 		patch["hiddenMonitors"] = hiddenMonitorsToAPI(ctx, plan.HiddenMonitors)
+	}
+	if !plan.SMSSubscriptionsEnabled.Equal(state.SMSSubscriptionsEnabled) {
+		patch["smsSubscriptionsEnabled"] = plan.SMSSubscriptionsEnabled.ValueBool()
+	}
+	if !plan.PushSubscriptionsEnabled.Equal(state.PushSubscriptionsEnabled) {
+		patch["pushSubscriptionsEnabled"] = plan.PushSubscriptionsEnabled.ValueBool()
+	}
+	if !plan.IPAllowlist.Equal(state.IPAllowlist) {
+		patch["ipAllowlist"] = stringsOf(ctx, plan.IPAllowlist)
 	}
 	if !cfg.AccessPasswordWO.IsNull() && !plan.AccessPasswordWOVersion.Equal(state.AccessPasswordWOVersion) {
 		patch["accessPassword"] = cfg.AccessPasswordWO.ValueString()
