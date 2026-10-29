@@ -46,6 +46,8 @@ type statusPageDomainModel struct {
 	VerifiedAt         types.String `tfsdk:"verified_at"`
 	VerificationRecord types.Object `tfsdk:"verification_record"`
 	CreatedAt          types.String `tfsdk:"created_at"`
+	LastVerifyError    types.String `tfsdk:"last_verification_error"`
+	LastVerifyErrorAt  types.String `tfsdk:"last_verification_error_at"`
 }
 
 func (m *statusPageDomainModel) fromAPI(d *client.StatusPageDomain, dns *client.DomainDNS) {
@@ -57,6 +59,8 @@ func (m *statusPageDomainModel) fromAPI(d *client.StatusPageDomain, dns *client.
 	m.VerificationRecord = types.ObjectValueMust(verificationRecordAttrTypes, map[string]attr.Value{
 		"name": types.StringValue(dns.TxtName), "value": types.StringValue(dns.TxtValue)})
 	m.CreatedAt = types.StringValue(d.CreatedAt)
+	m.LastVerifyError = rawJSONOrNull(d.LastVerificationError)
+	m.LastVerifyErrorAt = types.StringPointerValue(d.LastVerificationErrorAt)
 }
 
 func NewStatusPageDomainResource() resource.Resource { return &statusPageDomainResource{} }
@@ -94,7 +98,9 @@ func (r *statusPageDomainResource) Schema(_ context.Context, _ resource.SchemaRe
 					"name":  schema.StringAttribute{Computed: true, Description: "Name of the TXT record."},
 					"value": schema.StringAttribute{Computed: true, Description: "Value of the TXT record."},
 				}},
-			"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keep},
+			"created_at":                 schema.StringAttribute{Computed: true, PlanModifiers: keep},
+			"last_verification_error":    lastVerificationErrorAttr(),
+			"last_verification_error_at": lastVerificationErrorAtAttr(),
 		},
 	}
 }

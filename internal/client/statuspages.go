@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -150,8 +151,11 @@ type StatusPageDomain struct {
 	Status            string  `json:"status"`
 	VerificationToken *string `json:"verificationToken"`
 	VerifiedAt        *string `json:"verifiedAt"`
-	CreatedAt         string  `json:"createdAt"`
-	UpdatedAt         string  `json:"updatedAt"`
+	// Diagnosis of the last failed TXT verification, null after a successful one.
+	LastVerificationError   json.RawMessage `json:"lastVerificationError"`
+	LastVerificationErrorAt *string         `json:"lastVerificationErrorAt"`
+	CreatedAt               string          `json:"createdAt"`
+	UpdatedAt               string          `json:"updatedAt"`
 }
 
 type DomainDNS struct {

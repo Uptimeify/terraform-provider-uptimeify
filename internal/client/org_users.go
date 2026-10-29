@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 )
@@ -211,6 +212,9 @@ type WhitelabelDomain struct {
 		IsPrimary  bool    `json:"isPrimary"`
 		VerifiedAt *string `json:"verifiedAt"`
 		CreatedAt  string  `json:"createdAt"`
+		// Diagnosis of the last failed TXT verification, null after a successful one.
+		LastVerificationError   json.RawMessage `json:"lastVerificationError"`
+		LastVerificationErrorAt *string         `json:"lastVerificationErrorAt"`
 	} `json:"domain"`
 	DNS struct {
 		TxtName  string `json:"txtName"`
