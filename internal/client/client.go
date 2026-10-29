@@ -53,8 +53,16 @@ type APIError struct {
 	StatusMessage string
 	Code          string
 	RequestID     string
+	// Issues are the per-field validation problems of a 400 invalidRequestBody (data.issues).
+	Issues []Issue
 	// Data is the full `data` object, e.g. existingPublicId of 409 monitorAlreadyExists.
 	Data map[string]any
+}
+
+// Issue is one entry of data.issues: the field path (dot separated) and what is wrong with it.
+type Issue struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
 }
 
 func (e *APIError) Error() string {
@@ -67,6 +75,13 @@ func (e *APIError) Error() string {
 	}
 	if e.RequestID != "" {
 		msg += " [requestId " + e.RequestID + "]"
+	}
+	for _, is := range e.Issues {
+		if is.Path != "" {
+			msg += "\n  - " + is.Path + ": " + is.Message
+		} else {
+			msg += "\n  - " + is.Message
+		}
 	}
 	return msg
 }
@@ -182,8 +197,9 @@ func parseError(resp *http.Response, body []byte) error {
 		StatusMessage string `json:"statusMessage"`
 		Message       string `json:"message"`
 		Data          struct {
-			Code      string `json:"code"`
-			RequestID string `json:"requestId"`
+			Code      string  `json:"code"`
+			RequestID string  `json:"requestId"`
+			Issues    []Issue `json:"issues"`
 		} `json:"data"`
 	}
 	var raw struct {
@@ -198,6 +214,7 @@ func parseError(resp *http.Response, body []byte) error {
 			e.StatusMessage = h3.Message
 		}
 		e.Code = h3.Data.Code
+		e.Issues = h3.Data.Issues
 		if h3.Data.RequestID != "" {
 			e.RequestID = h3.Data.RequestID
 		}
