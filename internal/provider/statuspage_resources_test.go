@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -226,14 +228,17 @@ func TestAccStatusPage(t *testing.T) {
 	step1 := statusPageConfig(t, name, name, `
   description               = "tfacc page"
   include_customer_monitors = true
-  hidden_monitors           = [{ type = "dns", id = 999999 }]`)
+  hidden_monitors           = [{ type = "dns", id = 999999 }]
+  ip_allowlist              = ["203.0.113.0/24", "2001:db8::/32"]
+  sms_subscriptions_enabled = true`)
 	step2 := statusPageConfig(t, name+"-2", name, `
   visibility                 = "password_protected"
   access_password_wo         = "tfacc-password-1"
   access_password_wo_version = 1
   is_published               = false
   subscription_delay_minutes = 10
-  hidden_monitors            = [{ type = "dns", id = 999999 }, { type = "http", id = 999998 }]`)
+  hidden_monitors            = [{ type = "dns", id = 999999 }, { type = "http", id = 999998 }]
+  push_subscriptions_enabled = true`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -261,6 +266,12 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_status_page.by_slug", "id", r, "id"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_status_page.by_name", "description", r, "description"),
 					tfresource.TestCheckResourceAttr("data.uptimeify_status_page.by_name", "hidden_monitors.#", "1"),
+					tfresource.TestCheckResourceAttr(r, "ip_allowlist.#", "2"),
+					tfresource.TestCheckTypeSetElemAttr(r, "ip_allowlist.*", "2001:db8::/32"),
+					tfresource.TestCheckResourceAttr(r, "sms_subscriptions_enabled", "true"),
+					tfresource.TestCheckResourceAttr(r, "push_subscriptions_enabled", "false"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_status_page.by_id", "ip_allowlist.#", "2"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_status_page.by_id", "sms_subscriptions_enabled", "true"),
 				),
 			},
 			{ // update in place: rename, clear description, password protection, monitors
@@ -276,6 +287,10 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttr(r, "is_published", "false"),
 					tfresource.TestCheckResourceAttr(r, "subscription_delay_minutes", "10"),
 					tfresource.TestCheckResourceAttr(r, "hidden_monitors.#", "2"),
+					// removed from the configuration: back to the defaults (no IP restriction, no SMS)
+					tfresource.TestCheckResourceAttr(r, "ip_allowlist.#", "0"),
+					tfresource.TestCheckResourceAttr(r, "sms_subscriptions_enabled", "false"),
+					tfresource.TestCheckResourceAttr(r, "push_subscriptions_enabled", "true"),
 					// unset after being set: kept as is, no change
 					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "true"),
 				),
@@ -364,7 +379,16 @@ resource "uptimeify_status_page_design" "d" {
   history_days    = 14
   show_powered_by = false
   custom_title    = "tfacc title"
-  custom_css      = ".tfacc { color: red; }"`)
+  custom_css      = ".tfacc { color: red; }"
+  status_labels   = { operational = "tfacc ok", major_outage = "tfacc down" }`)
+	// the map is the complete list: dropping a state resets it to the default text
+	step2b := design(`layout = "cards"
+  accent_color    = "#112233"
+  history_days    = 14
+  show_powered_by = false
+  custom_title    = "tfacc title"
+  custom_css      = ".tfacc { color: red; }"
+  status_labels   = { degraded = "tfacc slow" }`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -393,6 +417,25 @@ resource "uptimeify_status_page_design" "d" {
 					tfresource.TestCheckResourceAttr(r, "history_days", "14"),
 					tfresource.TestCheckResourceAttr(r, "custom_css", ".tfacc { color: red; }"),
 					tfresource.TestCheckResourceAttr(r, "custom_css_stored", ".tfacc{color:red}"),
+					tfresource.TestCheckResourceAttr(r, "status_labels.%", "2"),
+					tfresource.TestCheckResourceAttr(r, "status_labels.major_outage", "tfacc down"),
+				),
+			},
+			{
+				Config: step2b,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttr(r, "status_labels.%", "1"),
+					tfresource.TestCheckResourceAttr(r, "status_labels.degraded", "tfacc slow"),
+					func(*terraform.State) error {
+						d, err := accClient().GetStatusPageDesign(context.Background(), pageID)
+						if err != nil {
+							return err
+						}
+						if len(d.StatusLabels) != 1 || d.StatusLabels["degraded"] != "tfacc slow" {
+							return fmt.Errorf("stored statusLabels %v", d.StatusLabels)
+						}
+						return nil
+					},
 				),
 			},
 			// import reads the stored (regenerated) form; custom_css_stored is compared instead
@@ -404,11 +447,11 @@ resource "uptimeify_status_page_design" "d" {
 						t.Fatal(err)
 					}
 				},
-				Config:             step2,
+				Config:             step2b,
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: true,
 			},
-			{Config: step2, Check: tfresource.TestCheckResourceAttr(r, "layout", "cards")},
+			{Config: step2b, Check: tfresource.TestCheckResourceAttr(r, "layout", "cards")},
 			{ // destroying the design resets it to the defaults, the page stays
 				Config: page,
 				Check: func(*terraform.State) error {
@@ -416,7 +459,7 @@ resource "uptimeify_status_page_design" "d" {
 					if err != nil {
 						return err
 					}
-					if d.Layout != "statusboard" || !d.ShowPoweredBy || d.HistoryDays != 30 || d.CustomTitle != "" || d.CustomCSS != "" {
+					if d.Layout != "statusboard" || !d.ShowPoweredBy || d.HistoryDays != 30 || d.CustomTitle != "" || d.CustomCSS != "" || len(d.StatusLabels) != 0 {
 						return fmt.Errorf("design not reset: %+v", d)
 					}
 					return nil
@@ -632,4 +675,138 @@ resource "uptimeify_status_page_domain_activation" "a" {
 			},
 		},
 	})
+}
+
+// sso_members_only needs verified SSO of the organization; without it the API refuses the page.
+func TestAccStatusPageSSOMembersOnlyNeedsSSO(t *testing.T) {
+	spAccSkip(t)
+	name := fmt.Sprintf("tfacc-spsso-%d", time.Now().UnixNano()%1_000_000)
+	tfresource.Test(t, tfresource.TestCase{
+		PreCheck:                 func() { accPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviders,
+		Steps: []tfresource.TestStep{{
+			Config:      statusPageConfig(t, name, name, `visibility = "sso_members_only"`),
+			ExpectError: regexp.MustCompile(`ssoNotConfigured`),
+		}},
+	})
+}
+
+func TestAccStatusPageAudienceGroups(t *testing.T) {
+	spAccSkip(t)
+	name := fmt.Sprintf("tfacc-spa-%d", time.Now().UnixNano()%1_000_000)
+	const r = "uptimeify_status_page_audience_groups.a"
+	var pageID string
+	config := func(groups string) string {
+		return statusPageConfig(t, name, name, "") + fmt.Sprintf(`
+resource "uptimeify_status_page_component" "intern" {
+  status_page_id = tonumber(uptimeify_status_page.p.id)
+  source_kind    = "manual"
+  name           = "tfacc intern"
+}
+
+resource "uptimeify_status_page_component" "partner" {
+  status_page_id = tonumber(uptimeify_status_page.p.id)
+  source_kind    = "manual"
+  name           = "tfacc partner"
+}
+
+resource "uptimeify_status_page_audience_groups" "a" {
+  status_page_id = tonumber(uptimeify_status_page.p.id)
+  groups         = %s
+}
+`, groups)
+	}
+	step1 := config(`[{
+    name          = "Staff"
+    email_domains = ["tfacc.example"]
+    component_ids = [uptimeify_status_page_component.intern.component_id]
+  }]`)
+	step2 := config(`[
+    { name = "Staff", email_domains = ["tfacc.example", "tfacc-2.example"], component_ids = [uptimeify_status_page_component.intern.component_id] },
+    { name = "Partner", email_domains = ["partner.example"], component_ids = [uptimeify_status_page_component.partner.component_id, uptimeify_status_page_component.intern.component_id] },
+  ]`)
+	groupsOnServer := func(want int) tfresource.TestCheckFunc {
+		return func(*terraform.State) error {
+			p, err := accClient().GetStatusPage(context.Background(), pageID)
+			if err != nil {
+				return err
+			}
+			if len(p.AudienceGroups) != want {
+				return fmt.Errorf("want %d audience groups on the page, got %+v", want, p.AudienceGroups)
+			}
+			return nil
+		}
+	}
+	tfresource.Test(t, tfresource.TestCase{
+		PreCheck:                 func() { accPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy:             statusPageGone(&pageID),
+		Steps: []tfresource.TestStep{
+			{
+				Config: step1,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					spSaveID("uptimeify_status_page.p", &pageID),
+					tfresource.TestCheckResourceAttrPair(r, "id", "uptimeify_status_page.p", "id"),
+					tfresource.TestCheckResourceAttr(r, "groups.#", "1"),
+					tfresource.TestCheckResourceAttr(r, "groups.0.name", "Staff"),
+					tfresource.TestCheckTypeSetElemAttrPair(r, "groups.0.component_ids.*", "uptimeify_status_page_component.intern", "component_id"),
+					groupsOnServer(1),
+				),
+			},
+			{
+				Config: step2,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttr(r, "groups.#", "2"),
+					tfresource.TestCheckResourceAttr(r, "groups.0.email_domains.#", "2"),
+					tfresource.TestCheckResourceAttr(r, "groups.1.name", "Partner"),
+					tfresource.TestCheckResourceAttr(r, "groups.1.component_ids.#", "2"),
+					groupsOnServer(2),
+				),
+			},
+			{ResourceName: r, ImportState: true, ImportStateVerify: true},
+			{ // drift: groups removed outside Terraform
+				PreConfig: func() {
+					accPreCheck(t)
+					if err := accClient().UpdateStatusPage(context.Background(), pageID, map[string]any{"audienceGroups": []any{}}); err != nil {
+						t.Fatal(err)
+					}
+				},
+				Config:             step2,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{Config: step2, Check: groupsOnServer(2)},
+			{ // destroying the resource removes the groups, page and components stay
+				Config: statusPageConfig(t, name, name, ""),
+				Check:  groupsOnServer(0),
+			},
+		},
+	})
+}
+
+// Unit: the CIDR validator accepts exactly the form the API stores unchanged.
+func TestCIDRValidator(t *testing.T) {
+	for in, ok := range map[string]bool{
+		"203.0.113.0/24": true, "203.0.113.5/32": true, "2001:db8::/32": true,
+		"203.0.113.5": false, "2001:DB8::/32": false, "203.0.113.0/33": false, "nonsense": false, "fe80::1%eth0/64": false,
+	} {
+		var resp validator.StringResponse
+		cidrValidator{}.ValidateString(context.Background(), validator.StringRequest{ConfigValue: types.StringValue(in)}, &resp)
+		if resp.Diagnostics.HasError() == ok {
+			t.Errorf("%q: accepted=%v, want %v", in, !resp.Diagnostics.HasError(), ok)
+		}
+	}
+}
+
+// Unit: status_labels is the complete list; every state it leaves out goes to the API as null.
+func TestStatusLabelsPatch(t *testing.T) {
+	m := types.MapValueMust(types.StringType, map[string]attr.Value{"partial_outage": types.StringValue("Teilweise")})
+	got := statusLabelsPatch(context.Background(), m)
+	if len(got) != 5 || got["partialOutage"] != "Teilweise" || got["operational"] != nil || got["majorOutage"] != nil {
+		t.Fatalf("patch %v", got)
+	}
+	back := statusLabelsFromAPI(map[string]string{"partialOutage": "Teilweise", "unknownKey": "x"})
+	if len(back.Elements()) != 1 || back.Elements()["partial_outage"].(types.String).ValueString() != "Teilweise" {
+		t.Fatalf("from API %v", back)
+	}
 }

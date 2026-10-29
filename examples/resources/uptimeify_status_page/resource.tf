@@ -17,9 +17,20 @@ resource "uptimeify_status_page" "acme" {
 }
 
 # A page of the whole organization: no customer, only the explicit components
-# (uptimeify_status_page_component), which may come from any customer.
+# (uptimeify_status_page_component), which may come from any customer. Visitors may also
+# subscribe by SMS and browser push.
 resource "uptimeify_status_page" "platform" {
-  name = "Platform Status"
+  name                       = "Platform Status"
+  sms_subscriptions_enabled  = true
+  push_subscriptions_enabled = true
+}
+
+# Internal page: only members signed in through the organization's single sign-on, and only
+# from the office networks.
+resource "uptimeify_status_page" "staff" {
+  name         = "Staff Status"
+  visibility   = "sso_members_only"
+  ip_allowlist = ["203.0.113.0/24", "2001:db8::/32"]
 }
 
 # Password-protected page; the password never lands in state.

@@ -160,16 +160,20 @@
   ],
   "PATCH /api/status-pages/{id}": [
     "accessPassword",
+    "audienceGroups",
     "customerId",
     "description",
     "designConfig",
     "hiddenMonitors",
     "includeCustomerMonitors",
+    "ipAllowlist",
     "isPublished",
     "name",
+    "pushSubscriptionsEnabled",
     "showRecentIncidents",
     "showRecentMaintenance",
     "slug",
+    "smsSubscriptionsEnabled",
     "subscriptionDelayMinutes",
     "subscriptionsEnabled",
     "visibility"
@@ -204,7 +208,8 @@
     "showMaintenance",
     "showPoweredBy",
     "showServiceUrls",
-    "showUptimeStats"
+    "showUptimeStats",
+    "statusLabels"
   ],
   "PATCH /api/status-pages/{id}/groups/{groupId}": [
     "collapsed",
@@ -381,11 +386,14 @@
     "description",
     "hiddenMonitors",
     "includeCustomerMonitors",
+    "ipAllowlist",
     "isPublished",
     "name",
+    "pushSubscriptionsEnabled",
     "showRecentIncidents",
     "showRecentMaintenance",
     "slug",
+    "smsSubscriptionsEnabled",
     "subscriptionDelayMinutes",
     "subscriptionsEnabled",
     "visibility"

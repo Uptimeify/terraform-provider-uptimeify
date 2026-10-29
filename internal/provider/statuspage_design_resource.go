@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -55,6 +57,39 @@ type statusPageDesignModel struct {
 	MaintenanceDays  types.Int64  `tfsdk:"maintenance_days"`
 	CustomCSS        types.String `tfsdk:"custom_css"`
 	CustomCSSStored  types.String `tfsdk:"custom_css_stored"`
+	StatusLabels     types.Map    `tfsdk:"status_labels"`
+}
+
+// statusLabelKeys: attribute map key -> API key in statusLabels.
+var statusLabelKeys = map[string]string{
+	"operational": "operational", "degraded": "degraded", "partial_outage": "partialOutage",
+	"major_outage": "majorOutage", "maintenance": "maintenance",
+}
+
+// statusLabelsPatch: the map is the complete set of own texts, so every state it leaves out is
+// reset (null) and the state equals the configuration after the merge-patch.
+func statusLabelsPatch(ctx context.Context, m types.Map) map[string]any {
+	in := map[string]string{}
+	m.ElementsAs(ctx, &in, false)
+	out := map[string]any{}
+	for attrKey, apiKey := range statusLabelKeys {
+		if v, ok := in[attrKey]; ok {
+			out[apiKey] = v
+		} else {
+			out[apiKey] = nil
+		}
+	}
+	return out
+}
+
+func statusLabelsFromAPI(labels map[string]string) types.Map {
+	elems := map[string]attr.Value{}
+	for attrKey, apiKey := range statusLabelKeys {
+		if v, ok := labels[apiKey]; ok && v != "" {
+			elems[attrKey] = types.StringValue(v)
+		}
+	}
+	return types.MapValueMust(types.StringType, elems)
 }
 
 // designField ties one managed attribute to its API key; seo_title is read-only (not settable).
@@ -108,6 +143,16 @@ func designPatch(plan, state *statusPageDesignModel) map[string]any {
 	return patch
 }
 
+// withStatusLabels adds the status labels to patch when the plan sets them and they changed.
+func withStatusLabels(ctx context.Context, patch map[string]any, plan, state *statusPageDesignModel) map[string]any {
+	v := plan.StatusLabels
+	if v.IsUnknown() || v.IsNull() || (state != nil && v.Equal(state.StatusLabels)) {
+		return patch
+	}
+	patch["statusLabels"] = statusLabelsPatch(ctx, v)
+	return patch
+}
+
 func (m *statusPageDesignModel) fromAPI(d *client.StatusPageDesign) {
 	m.ID = types.StringValue(strconv.FormatInt(m.StatusPageID.ValueInt64(), 10))
 	m.Layout = types.StringValue(d.Layout)
@@ -134,6 +179,7 @@ func (m *statusPageDesignModel) fromAPI(d *client.StatusPageDesign) {
 	m.MaintenanceDays = types.Int64Value(d.MaintenanceDays)
 	m.CustomCSS = types.StringValue(d.CustomCSS)
 	m.CustomCSSStored = types.StringValue(d.CustomCSS)
+	m.StatusLabels = statusLabelsFromAPI(d.StatusLabels)
 }
 
 // keepCSS: the server stores custom_css regenerated (minified), not as written. The written text
@@ -214,6 +260,15 @@ func (r *statusPageDesignResource) Schema(_ context.Context, _ resource.SchemaRe
 					"`@import`, `@font-face` or other resource loads; a rejected stylesheet fails the apply. Kept as written " +
 					"in state; the server's regenerated form is `custom_css_stored`.",
 				Validators: []validator.String{stringvalidator.LengthAtMost(20000)}},
+			"status_labels": schema.MapAttribute{ElementType: types.StringType, Optional: true, Computed: true,
+				PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()},
+				Description: "Own public texts per state, used by every layout, the badge and the widget. Keys: `operational`, " +
+					"`degraded`, `partial_outage`, `major_outage`, `maintenance`; values 1 to 40 characters, no surrounding " +
+					"whitespace. When set, the map is the complete list: a state left out shows its default text.",
+				Validators: []validator.Map{
+					mapvalidator.KeysAre(stringvalidator.OneOf("operational", "degraded", "partial_outage", "major_outage", "maintenance")),
+					mapvalidator.ValueStringsAre(stringvalidator.LengthBetween(1, 40), statusPageTrimmed),
+				}},
 			"custom_css_stored": schema.StringAttribute{Computed: true,
 				Description: "`custom_css` as the server stored it (regenerated and minified). A change made outside Terraform shows up here and in `custom_css`."},
 		},
@@ -240,7 +295,7 @@ func (r *statusPageDesignResource) Create(ctx context.Context, req resource.Crea
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	d, err := r.write(ctx, &plan, designPatch(&plan, nil))
+	d, err := r.write(ctx, &plan, withStatusLabels(ctx, designPatch(&plan, nil), &plan, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Setting status page design failed", err.Error())
 		return
@@ -279,7 +334,7 @@ func (r *statusPageDesignResource) Update(ctx context.Context, req resource.Upda
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	d, err := r.write(ctx, &plan, designPatch(&plan, &state))
+	d, err := r.write(ctx, &plan, withStatusLabels(ctx, designPatch(&plan, &state), &plan, &state))
 	if err != nil {
 		resp.Diagnostics.AddError("Updating status page design failed", err.Error())
 		return

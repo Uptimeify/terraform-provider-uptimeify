@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/uptimeify/terraform-provider-uptimeify/internal/client"
 )
@@ -40,7 +41,7 @@ func (d *statusPageDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"customer_id":                schema.Int64Attribute{Computed: true},
 			"customer_name":              c(""),
 			"description":                c(""),
-			"visibility":                 c("`public`, `customer_members_only` or `password_protected`."),
+			"visibility":                 c("`public`, `customer_members_only`, `password_protected` or `sso_members_only`."),
 			"is_published":               schema.BoolAttribute{Computed: true},
 			"subscriptions_enabled":      schema.BoolAttribute{Computed: true},
 			"subscription_delay_minutes": schema.Int64Attribute{Computed: true},
@@ -50,10 +51,13 @@ func (d *statusPageDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 					"type": schema.StringAttribute{Computed: true},
 					"id":   schema.Int64Attribute{Computed: true},
 				}}},
-			"has_password":           schema.BoolAttribute{Computed: true},
-			"access_password_set_at": c(""),
-			"created_at":             c(""),
-			"updated_at":             c(""),
+			"sms_subscriptions_enabled":  schema.BoolAttribute{Computed: true},
+			"push_subscriptions_enabled": schema.BoolAttribute{Computed: true},
+			"ip_allowlist":               schema.SetAttribute{ElementType: types.StringType, Computed: true, Description: "CIDR ranges allowed to see the page; empty = no IP restriction."},
+			"has_password":               schema.BoolAttribute{Computed: true},
+			"access_password_set_at":     c(""),
+			"created_at":                 c(""),
+			"updated_at":                 c(""),
 		},
 	}
 }

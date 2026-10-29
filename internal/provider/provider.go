@@ -96,6 +96,7 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewImOutboundResource,
 		NewStatusPageResource,
 		NewStatusPageDesignResource,
+		NewStatusPageAudienceGroupsResource,
 		NewStatusPageDomainResource,
 		NewStatusPageDomainActivationResource,
 		NewStatusPageComponentResource,

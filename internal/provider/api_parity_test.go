@@ -96,6 +96,7 @@ var parityIgnored = map[string]string{
 	"* showRecentMaintenance":                         "not mapped yet: status page incident/maintenance history toggles",
 	"POST /api/status-pages customDomainHostname":     "uptimeify_status_page_domain owns the custom domain",
 	"PATCH /api/status-pages/{id} designConfig":       "uptimeify_status_page_design owns the design",
+	"PATCH /api/status-pages/{id} audienceGroups":     "uptimeify_status_page_audience_groups owns them (they name components, which need the page first)",
 	"PATCH /api/organization/smtp disable":            "destroy of uptimeify_smtp_settings sends it",
 	"PATCH /api/organization/smtp clearLastTest":      "UI bookkeeping of the SMTP test mail",
 	"POST /api/notification-channels sourceChannelId": "UI duplicate action, no lasting state",
