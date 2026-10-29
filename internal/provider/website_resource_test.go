@@ -38,6 +38,22 @@ func TestWebsiteSchemasValid(t *testing.T) {
 
 // Unit: the PATCH mode choice. Partial-mode fields go out alone; anything else switches to the
 // full mode with every attribute, because that mode resets what it is not sent.
+func TestDropDeadChecks(t *testing.T) {
+	plan := websiteModel{
+		CheckKeywordEnabled: types.BoolValue(true), SearchTerm: types.StringNull(),
+		CheckSizeEnabled: types.BoolValue(true), MinPageSize: types.Int64Null(), MaxPageSize: types.Int64Value(9),
+	}
+	cfg := websiteModel{CheckKeywordEnabled: types.BoolNull(), CheckSizeEnabled: types.BoolNull()}
+	if !dropDeadChecks(&plan, &cfg) || plan.CheckKeywordEnabled.ValueBool() || !plan.CheckSizeEnabled.ValueBool() {
+		t.Fatalf("keyword without term must plan off, size with a limit stays: %+v", plan)
+	}
+	plan.CheckKeywordEnabled = types.BoolValue(true)
+	cfg.CheckKeywordEnabled = types.BoolValue(true)
+	if dropDeadChecks(&plan, &cfg) || !plan.CheckKeywordEnabled.ValueBool() {
+		t.Fatal("an explicit switch is the user's call; the server answers it")
+	}
+}
+
 func TestWebsiteUpdateBody(t *testing.T) {
 	base := websiteModel{
 		CustomerID: types.Int64Value(7), Name: types.StringValue("a"), URL: types.StringValue("https://1.1.1.1/"),
@@ -122,12 +138,18 @@ func TestAccWebsite(t *testing.T) {
 	}
 	const r = "uptimeify_website.http"
 
-	step1 := websiteStep{name: name, url: url, interval: 10, codes: "200", countries: `["DE"]`, method: "POST", headersVer: 1}
+	step1 := websiteStep{name: name, url: url, interval: 10, codes: "200", countries: `["DE"]`, method: "POST", headersVer: 1,
+		checks: `check_keyword_enabled = true
+  search_term           = "tfacc"`}
 	step2 := step1 // partial mode only
 	step2.name, step2.interval, step2.codes = name+"-2", 15, "200,204"
 	step2.hbRotation = "r1"
 	step3 := step2 // full mode: method, countries, new headers, basic auth
 	step3.method, step3.countries, step3.headersVer, step3.basicAuth = "GET", `["DE", "NL"]`, 2, true
+	// Keyword check and search term removed in the same full update (DeepL 29.10.2026).
+	step3.checks = `check_expected_response_enabled = true
+  expected_response_match_type    = "contains"
+  expected_response_value         = "tfacc"`
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -155,6 +177,8 @@ func TestAccWebsite(t *testing.T) {
 					tfresource.TestCheckResourceAttr(r, "allowed_check_country_codes.#", "1"),
 					tfresource.TestCheckResourceAttr(r, "connect_host", "1.0.0.1"),
 					tfresource.TestCheckResourceAttr(r, "connect_port", "443"),
+					tfresource.TestCheckResourceAttr(r, "check_keyword_enabled", "true"),
+					tfresource.TestCheckResourceAttr(r, "search_term", "tfacc"),
 					tfresource.TestCheckResourceAttr(r, "has_custom_headers", "true"),
 					tfresource.TestCheckResourceAttr(r, "has_request_body", "true"),
 					tfresource.TestCheckNoResourceAttr(r, "custom_headers_wo"),
@@ -191,6 +215,10 @@ data "uptimeify_website" "by_id" { id = uptimeify_website.http.public_id }
 			{ // full PATCH mode; untouched fields (interval, status codes, timeout, status, ssl_error_days) must survive
 				Config: step3.config(t),
 				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttr(r, "check_keyword_enabled", "false"),
+					tfresource.TestCheckNoResourceAttr(r, "search_term"),
+					tfresource.TestCheckResourceAttr(r, "check_expected_response_enabled", "true"),
+					tfresource.TestCheckResourceAttr(r, "expected_response_value", "tfacc"),
 					sameID,
 					tfresource.TestCheckResourceAttr(r, "http_method", "GET"),
 					tfresource.TestCheckResourceAttr(r, "allowed_check_country_codes.#", "2"),
@@ -232,7 +260,7 @@ type websiteStep struct {
 	name, url, codes, countries, method string
 	interval, headersVer                int
 	basicAuth                           bool
-	hbRotation                          string
+	hbRotation, checks                  string
 }
 
 func (s websiteStep) config(t *testing.T) string {
@@ -269,6 +297,7 @@ resource "uptimeify_website" "http" {
   custom_headers_wo_version = %[7]d
   request_body_wo           = "{\"tfacc\":true}"
   request_body_wo_version   = 1
+  %[10]s
 %[8]s
 }
 
@@ -281,7 +310,7 @@ resource "uptimeify_website" "hb" {
   heartbeat_grace_period_minutes = 10
   %[9]s
 }
-`, s.name, s.url, s.interval, s.method, s.codes, s.countries, s.headersVer, auth, rotation)
+`, s.name, s.url, s.interval, s.method, s.codes, s.countries, s.headersVer, auth, rotation, s.checks)
 }
 
 // accCustomerConfig is the provider block plus data.uptimeify_customer.c: by name from

@@ -453,28 +453,58 @@ func rotatesHeartbeat(plan, state *websiteResourceModel) bool {
 }
 
 // ModifyPlan: a rotation changes the token and the url, which otherwise keep their state value.
+// It also switches off a companion check left without its value (dropDeadChecks).
 func (r *websiteResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
 		return
 	}
-	var plan, state websiteResourceModel
-	var cfgURL types.String
+	var plan, state, cfg websiteResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("url"), &cfgURL)...)
-	if resp.Diagnostics.HasError() || !rotatesHeartbeat(&plan, &state) {
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if plan.MonitoringType.ValueString() != "heartbeat" {
-		resp.Diagnostics.AddAttributeError(path.Root("heartbeat_token_rotation"), "Not a heartbeat monitor",
-			"heartbeat_token_rotation only works with monitoring_type = \"heartbeat\".")
-		return
+	changed := dropDeadChecks(&plan.websiteModel, &cfg.websiteModel)
+	if rotatesHeartbeat(&plan, &state) {
+		if plan.MonitoringType.ValueString() != "heartbeat" {
+			resp.Diagnostics.AddAttributeError(path.Root("heartbeat_token_rotation"), "Not a heartbeat monitor",
+				"heartbeat_token_rotation only works with monitoring_type = \"heartbeat\".")
+			return
+		}
+		plan.HeartbeatToken = types.StringUnknown()
+		if cfg.URL.IsNull() {
+			plan.URL = types.StringUnknown()
+		}
+		changed = true
 	}
-	plan.HeartbeatToken = types.StringUnknown()
-	if cfgURL.IsNull() {
-		plan.URL = types.StringUnknown()
+	if changed {
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 	}
-	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+}
+
+// dropDeadChecks plans the keyword and size checks off when the configuration leaves both the
+// switch and its values unset. The switch otherwise keeps its state value (UseStateForUnknown),
+// so removing search_term together with check_keyword_enabled sent checkKeywordEnabled = true
+// without a searchTerm, which the server rejects with checkRequiresValue (DeepL, 29.10.2026).
+// The server drops such a check itself when it is not sent (dropDeadCompanionChecks).
+func dropDeadChecks(plan, cfg *websiteModel) bool {
+	changed := false
+	off := func(sw *types.Bool, cfgSw types.Bool, values ...attr.Value) {
+		if !cfgSw.IsNull() || !sw.ValueBool() {
+			return
+		}
+		for _, v := range values {
+			if !v.IsNull() {
+				return
+			}
+		}
+		*sw = types.BoolValue(false)
+		changed = true
+	}
+	off(&plan.CheckKeywordEnabled, cfg.CheckKeywordEnabled, plan.SearchTerm)
+	off(&plan.CheckSizeEnabled, cfg.CheckSizeEnabled, plan.MinPageSize, plan.MaxPageSize)
+	return changed
 }
 
 // websiteChecks are the package-gated check switches the server may silently switch off.
