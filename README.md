@@ -15,7 +15,7 @@ terraform {
   required_providers {
     uptimeify = {
       source  = "uptimeify/uptimeify"
-      version = "~> 0.1"
+      version = "~> 0.2"
     }
   }
 }
@@ -93,7 +93,7 @@ configuration together with their `*_wo_version` after the import.
 
 ## What you can manage
 
-Everything the Uptimeify API allows an API token to change: 44 resources and 25 data sources.
+Everything the Uptimeify API allows an API token to change: 47 resources and 25 data sources.
 
 | Area | Resources |
 | --- | --- |
@@ -108,7 +108,7 @@ Everything the Uptimeify API allows an API token to change: 44 resources and 25 
 All names carry the `uptimeify_` prefix. Data sources cover the monitors and the lookups you need to
 wire things together, for example `uptimeify_customer` and `uptimeify_im_team` by name,
 `uptimeify_im_on_call`, `uptimeify_monitoring_locations` and `uptimeify_package_configs`.
-Full reference for every attribute: [`docs/`](docs/).
+Full reference for every attribute, with guides for customer tokens, import and secrets: [docs.uptimeify.io/terraform](https://docs.uptimeify.io/terraform) (German: [docs.uptimeify.io/de/terraform](https://docs.uptimeify.io/de/terraform)).
 
 **Secrets stay out of your state.** Every secret is a write-only attribute (`*_wo`). Increase the
 matching `*_wo_version` to send a new value.
@@ -121,7 +121,7 @@ personal notification settings, the organization's MFA policy and the SMS overag
 
 ## Support
 
-API documentation: [docs.uptimeify.io/api](https://docs.uptimeify.io/api).
+Provider documentation: [docs.uptimeify.io/terraform](https://docs.uptimeify.io/terraform). API documentation: [docs.uptimeify.io/api](https://docs.uptimeify.io/api).
 Questions and feature requests: [hello@uptimeify.io](mailto:hello@uptimeify.io).
 Development and releases: [CONTRIBUTING.md](CONTRIBUTING.md).
 
