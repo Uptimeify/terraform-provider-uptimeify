@@ -93,14 +93,14 @@ configuration together with their `*_wo_version` after the import.
 
 ## What you can manage
 
-Everything the Uptimeify API allows an API token to change: 47 resources and 25 data sources.
+Everything the Uptimeify API allows an API token to change: 48 resources and 25 data sources.
 
 | Area | Resources |
 | --- | --- |
 | Monitors | `website` (HTTP and heartbeat), `dns_monitor`, `tcp_monitor`, `icmp_monitor`, `smtp_monitor`, `ssh_monitor`, `ftp_monitor`, `imap_pop_monitor` |
 | Organizing | `tag`, `monitor_tag`, `custom_field`, `maintenance_window` |
 | Alerting | `notification_channel`, `escalation_config` |
-| Customers | `customer`, `customer_ip`, `customer_domain` |
+| Customers | `customer`, `customer_ip`, `customer_domain`, `package_config` |
 | Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings`, `user_notification_settings`, `notification_template` |
 | Status pages | `status_page`, `status_page_design`, `status_page_audience_groups`, `status_page_component`, `status_page_component_group`, `status_page_maintenance`, `status_page_domain`, `status_page_domain_activation` |
 | Organization | `organization_settings`, `organization_branding`, `whitelabel_domain`, `report`, `smtp_settings`, `user`, `sso_oidc`, `sso_domain_verification` |

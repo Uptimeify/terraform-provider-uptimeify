@@ -115,6 +115,7 @@ func (p *uptimeifyProvider) Resources(context.Context) []func() resource.Resourc
 		NewNotificationChannelResource,
 		NewEscalationConfigResource,
 		NewCustomFieldResource,
+		NewPackageConfigResource,
 		NewSSOOIDCResource,
 		NewSSODomainVerificationResource,
 	}

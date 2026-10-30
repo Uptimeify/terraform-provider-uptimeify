@@ -91,16 +91,17 @@ var parityAliases = map[string]string{
 
 // parityIgnored: "<endpoint> <apiField>" (or "* <apiField>") -> why the provider does not send it.
 var parityIgnored = map[string]string{
-	"* notificationChannels":                          "deprecated per-customer channel switches, the API asks for null",
-	"* showRecentIncidents":                           "not mapped yet: status page incident/maintenance history toggles",
-	"* showRecentMaintenance":                         "not mapped yet: status page incident/maintenance history toggles",
-	"POST /api/status-pages customDomainHostname":     "uptimeify_status_page_domain owns the custom domain",
-	"PATCH /api/status-pages/{id} designConfig":       "uptimeify_status_page_design owns the design",
-	"PATCH /api/status-pages/{id} audienceGroups":     "uptimeify_status_page_audience_groups owns them (they name components, which need the page first)",
-	"PATCH /api/organization/smtp disable":            "destroy of uptimeify_smtp_settings sends it",
-	"PATCH /api/organization/smtp clearLastTest":      "UI bookkeeping of the SMTP test mail",
-	"POST /api/notification-channels sourceChannelId": "UI duplicate action, no lasting state",
-	"POST /api/notification-channels websiteId":       "legacy per-website channel; channels attach via notification_targets/conditions",
+	"* notificationChannels":                             "deprecated per-customer channel switches, the API asks for null",
+	"* showRecentIncidents":                              "not mapped yet: status page incident/maintenance history toggles",
+	"* showRecentMaintenance":                            "not mapped yet: status page incident/maintenance history toggles",
+	"POST /api/status-pages customDomainHostname":        "uptimeify_status_page_domain owns the custom domain",
+	"PATCH /api/status-pages/{id} designConfig":          "uptimeify_status_page_design owns the design",
+	"PATCH /api/status-pages/{id} monitorUpdatesEnabled": "not mapped yet: monitors writing to the page (app 4bfb5a63d)",
+	"PATCH /api/status-pages/{id} audienceGroups":        "uptimeify_status_page_audience_groups owns them (they name components, which need the page first)",
+	"PATCH /api/organization/smtp disable":               "destroy of uptimeify_smtp_settings sends it",
+	"PATCH /api/organization/smtp clearLastTest":         "UI bookkeeping of the SMTP test mail",
+	"POST /api/notification-channels sourceChannelId":    "UI duplicate action, no lasting state",
+	"POST /api/notification-channels websiteId":          "legacy per-website channel; channels attach via notification_targets/conditions",
 	// Protocol monitors: the nested config object (config or <type>Config) is flattened into the
 	// type's own attributes (protocol_monitor_types.go); its keys are not part of this check.
 	"* config":                           "nested config object, flattened into the type's attributes",

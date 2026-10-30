@@ -24,6 +24,7 @@ resource "uptimeify_status_page" "acme" {
   slug                      = "acme"
   description               = "Live status of the ACME shop."
   include_customer_monitors = true
+  management_type           = "self_service" # the customer operates it; default "managed"
 
   hidden_monitors = [
     { type = "http", id = 1234 },
@@ -84,6 +85,7 @@ variable "status_page_password" {
 - `include_customer_monitors` (Boolean) Also show every monitor of the customer (minus `hidden_monitors`) after the explicit components (`uptimeify_status_page_component`). `false` = only the components. Unset = the server default at creation (`false` for new pages; older app versions used `true` for pages with a customer), then kept as is.
 - `ip_allowlist` (Set of String) Only visitors from these networks see the page (403 for everyone else), on top of `visibility`. CIDR ranges with explicit prefix and lowercase address (`203.0.113.0/24`, `203.0.113.5/32`, `2001:db8::/32`), at most 50. Default: none (no IP restriction). A page with a list has no badge, widget, feeds or subscriptions.
 - `is_published` (Boolean) Default `true`.
+- `management_type` (String) Ownership class like monitors: `managed` (the organization operates the page) or `self_service` (the customer operates it). Unset = the server default at creation (`managed`; a customer-bound token always creates `self_service`), then kept as is. Only organization-wide admin tokens may choose or change it (`managementTypeOrgOnly` otherwise).
 - `push_subscriptions_enabled` (Boolean) Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
 - `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota.

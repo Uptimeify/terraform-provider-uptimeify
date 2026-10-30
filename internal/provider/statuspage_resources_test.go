@@ -238,7 +238,8 @@ func TestAccStatusPage(t *testing.T) {
   is_published               = false
   subscription_delay_minutes = 10
   hidden_monitors            = [{ type = "dns", id = 999999 }, { type = "http", id = 999998 }]
-  push_subscriptions_enabled = true`)
+  push_subscriptions_enabled = true
+  management_type            = "self_service"`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -255,6 +256,8 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					spSaveID(r, &pageID),
 					tfresource.TestCheckResourceAttr(r, "slug", name),
 					tfresource.TestCheckResourceAttr(r, "visibility", "public"),
+					tfresource.TestCheckResourceAttr(r, "management_type", "managed"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_status_page.by_name", "management_type", "managed"),
 					tfresource.TestCheckResourceAttr(r, "is_published", "true"),
 					tfresource.TestCheckResourceAttr(r, "subscriptions_enabled", "true"),
 					tfresource.TestCheckResourceAttr(r, "subscription_delay_minutes", "5"),
@@ -281,6 +284,7 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttr(r, "name", name+"-2"),
 					tfresource.TestCheckNoResourceAttr(r, "description"),
 					tfresource.TestCheckResourceAttr(r, "visibility", "password_protected"),
+					tfresource.TestCheckResourceAttr(r, "management_type", "self_service"),
 					tfresource.TestCheckResourceAttr(r, "has_password", "true"),
 					tfresource.TestCheckResourceAttrSet(r, "access_password_set_at"),
 					tfresource.TestCheckNoResourceAttr(r, "access_password_wo"),

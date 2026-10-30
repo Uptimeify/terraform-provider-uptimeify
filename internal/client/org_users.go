@@ -133,6 +133,7 @@ type PackageConfig struct {
 	PackageType                 string   `json:"packageType" tfsdk:"package_type"`
 	DisplayName                 *string  `json:"displayName" tfsdk:"display_name"`
 	MaxURLs                     *int64   `json:"maxUrls" tfsdk:"max_urls"`
+	MaxStatusPages              *int64   `json:"maxStatusPages" tfsdk:"max_status_pages"` // null = unlimited
 	AllowedCheckCountryCodes    []string `json:"allowedCheckCountryCodes" tfsdk:"allowed_check_country_codes"`
 	DataRetentionMonths         *int64   `json:"dataRetentionMonths" tfsdk:"data_retention_months"`
 	CheckIntervalMinutes        *int64   `json:"checkIntervalMinutes" tfsdk:"check_interval_minutes"`
@@ -173,6 +174,21 @@ type PackageConfig struct {
 func (c *Client) ListPackageConfigs(ctx context.Context) ([]PackageConfig, error) {
 	var out []PackageConfig
 	return out, c.Do(ctx, http.MethodGet, "/api/package-configs", nil, &out)
+}
+
+func packageConfigPath(packageType string) string {
+	return "/api/package-configs/" + url.PathEscape(packageType)
+}
+
+// UpsertPackageConfig PATCHes one package by type: creates it if missing, else merges the patch.
+func (c *Client) UpsertPackageConfig(ctx context.Context, packageType string, patch map[string]any) (*PackageConfig, error) {
+	var out PackageConfig
+	return &out, c.Do(ctx, http.MethodPatch, packageConfigPath(packageType), patch, &out)
+}
+
+// DeletePackageConfig fails with 409 packageInUse while customers use the package.
+func (c *Client) DeletePackageConfig(ctx context.Context, packageType string) error {
+	return c.Do(ctx, http.MethodDelete, packageConfigPath(packageType), nil, nil)
 }
 
 // SMTPSettings is the `smtp` object of GET/PATCH /api/organization/smtp.

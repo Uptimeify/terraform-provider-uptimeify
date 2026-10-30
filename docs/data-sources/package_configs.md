@@ -63,6 +63,7 @@ Read-Only:
 - `flapping_window_minutes` (Number)
 - `id` (Number)
 - `max_self_service_urls` (Number)
+- `max_status_pages` (Number)
 - `max_urls` (Number)
 - `monthly_reports_default` (Boolean)
 - `notes` (String)

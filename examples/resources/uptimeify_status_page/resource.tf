@@ -9,6 +9,7 @@ resource "uptimeify_status_page" "acme" {
   slug                      = "acme"
   description               = "Live status of the ACME shop."
   include_customer_monitors = true
+  management_type           = "self_service" # the customer operates it; default "managed"
 
   hidden_monitors = [
     { type = "http", id = 1234 },
