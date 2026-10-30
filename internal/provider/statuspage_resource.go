@@ -61,6 +61,7 @@ type statusPageModel struct {
 	Slug                     types.String `tfsdk:"slug"`
 	Description              types.String `tfsdk:"description"`
 	Visibility               types.String `tfsdk:"visibility"`
+	ManagementType           types.String `tfsdk:"management_type"`
 	IsPublished              types.Bool   `tfsdk:"is_published"`
 	SubscriptionsEnabled     types.Bool   `tfsdk:"subscriptions_enabled"`
 	SubscriptionDelayMinutes types.Int64  `tfsdk:"subscription_delay_minutes"`
@@ -91,6 +92,7 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 	m.Slug = types.StringValue(p.Slug)
 	m.Description = types.StringPointerValue(p.Description)
 	m.Visibility = types.StringValue(p.Visibility)
+	m.ManagementType = types.StringValue(p.ManagementType)
 	m.IsPublished = types.BoolValue(p.IsPublished)
 	m.SubscriptionsEnabled = types.BoolValue(p.SubscriptionsEnabled)
 	m.SubscriptionDelayMinutes = types.Int64Value(p.SubscriptionDelayMinutes)
@@ -190,6 +192,12 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					"is `customer_members_only` plus a session from the organization's single sign-on (`uptimeify_sso_oidc`); " +
 					"without verified SSO the API refuses it (`ssoNotConfigured`).",
 				Validators: []validator.String{stringvalidator.OneOf(client.StatusPageVisibilities...)}},
+			"management_type": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: keep,
+				Description: "Ownership class like monitors: `managed` (the organization operates the page) or `self_service` " +
+					"(the customer operates it). Unset = the server default at creation (`managed`; a customer-bound token always " +
+					"creates `self_service`), then kept as is. Only organization-wide admin tokens may choose or change it " +
+					"(`managementTypeOrgOnly` otherwise).",
+				Validators: []validator.String{stringvalidator.OneOf(client.ManagementTypes...)}},
 			"access_password_wo": schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true,
 				Description: "Access password, 8 to 200 characters. Write-only: sent on create and whenever " +
 					"`access_password_wo_version` changes; never stored in state. Removing it does not remove the password.",
@@ -263,6 +271,9 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	if !plan.CustomerID.IsNull() { // omitted (create refuses null) = page of the organization
 		body["customerId"] = plan.CustomerID.ValueInt64()
+	}
+	if !plan.ManagementType.IsUnknown() { // unset: the server default (managed)
+		body["managementType"] = plan.ManagementType.ValueString()
 	}
 	if !plan.IncludeCustomerMonitors.IsUnknown() { // unset: the server default for new pages
 		body["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
@@ -347,6 +358,9 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	if !plan.Visibility.Equal(state.Visibility) {
 		patch["visibility"] = plan.Visibility.ValueString()
+	}
+	if !plan.ManagementType.IsUnknown() && !plan.ManagementType.Equal(state.ManagementType) {
+		patch["managementType"] = plan.ManagementType.ValueString()
 	}
 	if !plan.IsPublished.Equal(state.IsPublished) {
 		patch["isPublished"] = plan.IsPublished.ValueBool()

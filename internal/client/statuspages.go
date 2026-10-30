@@ -14,6 +14,7 @@ import (
 // StatusPageVisibilities and MonitorKinds mirror the API contract enums.
 var (
 	StatusPageVisibilities = []string{"public", "customer_members_only", "password_protected", "sso_members_only"}
+	ManagementTypes        = []string{"managed", "self_service"}
 	MonitorKinds           = []string{"http", "dns", "icmp", "smtp", "ssh", "tcp", "ftp", "imap_pop"}
 	StatusPageTargetStates = []string{"warning", "degraded"}
 	// ComponentSourceKinds and ComponentManualStatuses mirror createStatusPageComponentSchema.
@@ -45,6 +46,7 @@ type StatusPage struct {
 	Slug                     string          `json:"slug"`
 	Description              *string         `json:"description"`
 	Visibility               string          `json:"visibility"`
+	ManagementType           string          `json:"managementType"`
 	IsPublished              bool            `json:"isPublished"`
 	SubscriptionsEnabled     bool            `json:"subscriptionsEnabled"`
 	SubscriptionDelayMinutes int64           `json:"subscriptionDelayMinutes"`

@@ -97,7 +97,7 @@ func (d *packageConfigsDataSource) Schema(_ context.Context, _ datasource.Schema
 		Attributes: map[string]schema.Attribute{
 			"package_configs": schema.ListNestedAttribute{Computed: true, NestedObject: schema.NestedAttributeObject{
 				Attributes: computedAttrs(map[string]string{
-					"id": "i", "package_type": "s", "display_name": "s", "max_urls": "i", "allowed_check_country_codes": "ls",
+					"id": "i", "package_type": "s", "display_name": "s", "max_urls": "i", "max_status_pages": "i", "allowed_check_country_codes": "ls",
 					"data_retention_months": "i", "check_interval_minutes": "i", "check_locations": "i",
 					"notification_delay_minutes": "i", "reminder_delay_minutes": "i", "alert_consecutive_checks": "i",
 					"alert_location_threshold": "s", "alert_location_threshold_count": "i", "alert_reminder_interval": "i",

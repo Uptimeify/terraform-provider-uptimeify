@@ -168,6 +168,8 @@
     "includeCustomerMonitors",
     "ipAllowlist",
     "isPublished",
+    "managementType",
+    "monitorUpdatesEnabled",
     "name",
     "pushSubscriptionsEnabled",
     "showRecentIncidents",
@@ -182,9 +184,12 @@
     "description",
     "groupId",
     "manualStatus",
+    "monitorId",
+    "monitorType",
     "name",
     "showUptime",
-    "sort"
+    "sort",
+    "sourceKind"
   ],
   "PATCH /api/status-pages/{id}/design": [
     "accentColor",
@@ -388,6 +393,7 @@
     "includeCustomerMonitors",
     "ipAllowlist",
     "isPublished",
+    "managementType",
     "name",
     "pushSubscriptionsEnabled",
     "showRecentIncidents",

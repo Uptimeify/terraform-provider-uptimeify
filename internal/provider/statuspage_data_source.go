@@ -42,6 +42,7 @@ func (d *statusPageDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"customer_name":              c(""),
 			"description":                c(""),
 			"visibility":                 c("`public`, `customer_members_only`, `password_protected` or `sso_members_only`."),
+			"management_type":            c("`managed` or `self_service`."),
 			"is_published":               schema.BoolAttribute{Computed: true},
 			"subscriptions_enabled":      schema.BoolAttribute{Computed: true},
 			"subscription_delay_minutes": schema.Int64Attribute{Computed: true},

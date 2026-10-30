@@ -43,6 +43,7 @@ data "uptimeify_status_page" "by_id" {
 - `include_customer_monitors` (Boolean) Every monitor of the customer appears after the components.
 - `ip_allowlist` (Set of String) CIDR ranges allowed to see the page; empty = no IP restriction.
 - `is_published` (Boolean)
+- `management_type` (String) `managed` or `self_service`.
 - `organization_id` (Number)
 - `public_id` (String)
 - `push_subscriptions_enabled` (Boolean)
