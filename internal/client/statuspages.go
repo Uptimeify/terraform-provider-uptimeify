@@ -51,6 +51,7 @@ type StatusPage struct {
 	SubscriptionsEnabled     bool            `json:"subscriptionsEnabled"`
 	SubscriptionDelayMinutes int64           `json:"subscriptionDelayMinutes"`
 	IncludeCustomerMonitors  bool            `json:"includeCustomerMonitors"`
+	MonitorUpdatesEnabled    bool            `json:"monitorUpdatesEnabled"`
 	HiddenMonitors           []MonitorRef    `json:"hiddenMonitors"`
 	SMSSubscriptionsEnabled  bool            `json:"smsSubscriptionsEnabled"`
 	PushSubscriptionsEnabled bool            `json:"pushSubscriptionsEnabled"`

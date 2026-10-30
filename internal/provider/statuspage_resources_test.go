@@ -239,7 +239,8 @@ func TestAccStatusPage(t *testing.T) {
   subscription_delay_minutes = 10
   hidden_monitors            = [{ type = "dns", id = 999999 }, { type = "http", id = 999998 }]
   push_subscriptions_enabled = true
-  management_type            = "self_service"`)
+  management_type            = "self_service"
+  monitor_updates_enabled    = false`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -263,6 +264,8 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckResourceAttr(r, "subscription_delay_minutes", "5"),
 					tfresource.TestCheckResourceAttr(r, "has_password", "false"),
 					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "true"),
+					tfresource.TestCheckResourceAttr(r, "monitor_updates_enabled", "true"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_status_page.by_id", "monitor_updates_enabled", "true"),
 					tfresource.TestCheckResourceAttr(r, "hidden_monitors.#", "1"),
 					tfresource.TestCheckResourceAttrSet(r, "public_id"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_status_page.by_id", "public_id", r, "public_id"),
@@ -285,6 +288,7 @@ data "uptimeify_status_page" "by_name" { name = uptimeify_status_page.p.name }
 					tfresource.TestCheckNoResourceAttr(r, "description"),
 					tfresource.TestCheckResourceAttr(r, "visibility", "password_protected"),
 					tfresource.TestCheckResourceAttr(r, "management_type", "self_service"),
+					tfresource.TestCheckResourceAttr(r, "monitor_updates_enabled", "false"),
 					tfresource.TestCheckResourceAttr(r, "has_password", "true"),
 					tfresource.TestCheckResourceAttrSet(r, "access_password_set_at"),
 					tfresource.TestCheckNoResourceAttr(r, "access_password_wo"),
@@ -328,6 +332,7 @@ resource "uptimeify_status_page" "p" {
   name                      = %q
   slug                      = %q
   include_customer_monitors = false
+  monitor_updates_enabled   = false
 }
 `, name, name)
 	tfresource.Test(t, tfresource.TestCase{
@@ -342,6 +347,7 @@ resource "uptimeify_status_page" "p" {
 					tfresource.TestCheckNoResourceAttr(r, "customer_id"),
 					tfresource.TestCheckNoResourceAttr(r, "customer_name"),
 					tfresource.TestCheckResourceAttr(r, "include_customer_monitors", "false"),
+					tfresource.TestCheckResourceAttr(r, "monitor_updates_enabled", "false"), // set by the PATCH after create
 				),
 			},
 			{ResourceName: r, ImportState: true, ImportStateVerify: true},
@@ -351,6 +357,7 @@ resource "uptimeify_status_page" "p" {
 					spSameID(r, &pageID),
 					tfresource.TestCheckResourceAttrSet(r, "customer_id"),
 					tfresource.TestCheckResourceAttrSet(r, "customer_name"),
+					tfresource.TestCheckResourceAttr(r, "monitor_updates_enabled", "true"), // removed: back to the default
 				),
 			},
 			{
@@ -812,5 +819,61 @@ func TestStatusLabelsPatch(t *testing.T) {
 	back := statusLabelsFromAPI(map[string]string{"partialOutage": "Teilweise", "unknownKey": "x"})
 	if len(back.Elements()) != 1 || back.Elements()["partial_outage"].(types.String).ValueString() != "Teilweise" {
 		t.Fatalf("from API %v", back)
+	}
+}
+
+// Unit: the create endpoint does not take monitorUpdatesEnabled; false goes in a PATCH right after.
+func TestStatusPageCreateMonitorUpdatesOff(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(b)
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+string(b))
+		switch r.Method {
+		case http.MethodPost:
+			_, _ = w.Write([]byte(`{"statusPage":{"id":5,"slug":"p"}}`))
+		case http.MethodPatch:
+			_, _ = w.Write([]byte(`{"statusPage":{"id":5}}`))
+		default:
+			_, _ = w.Write([]byte(`{"id":5,"publicId":"u","organizationId":2,"customerId":null,"name":"P","slug":"p",
+				"visibility":"public","managementType":"managed","isPublished":true,"subscriptionsEnabled":true,
+				"subscriptionDelayMinutes":5,"includeCustomerMonitors":false,"monitorUpdatesEnabled":false,"hiddenMonitors":[],
+				"ipAllowlist":[],"hasPassword":false,"createdAt":"c","updatedAt":"u"}`))
+		}
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &statusPageResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	m := statusPageResourceModel{statusPageModel: statusPageModel{ID: types.StringUnknown(), PublicID: types.StringUnknown(),
+		OrganizationID: types.Int64Unknown(), CustomerID: types.Int64Null(), CustomerName: types.StringUnknown(),
+		Name: types.StringValue("P"), Slug: types.StringUnknown(), Description: types.StringNull(),
+		Visibility: types.StringValue("public"), ManagementType: types.StringUnknown(), IsPublished: types.BoolValue(true),
+		SubscriptionsEnabled: types.BoolValue(true), SubscriptionDelayMinutes: types.Int64Value(5),
+		IncludeCustomerMonitors: types.BoolUnknown(), MonitorUpdatesEnabled: types.BoolValue(false),
+		HiddenMonitors:          types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil),
+		SMSSubscriptionsEnabled: types.BoolValue(false), PushSubscriptionsEnabled: types.BoolValue(false),
+		IPAllowlist: types.SetValueMust(types.StringType, nil), HasPassword: types.BoolUnknown(),
+		AccessPasswordSetAt: types.StringUnknown(), CreatedAt: types.StringUnknown(), UpdatedAt: types.StringUnknown()},
+		AccessPasswordWO: types.StringNull(), AccessPasswordWOVersion: types.Int64Null()}
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	if d := plan.Set(ctx, &m); d.HasError() {
+		t.Fatal(d)
+	}
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan, Config: tfsdk.Config{Schema: sch.Schema, Raw: plan.Raw}}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	if len(calls) != 3 || strings.Contains(calls[0], "monitorUpdatesEnabled") ||
+		calls[1] != `PATCH /api/status-pages/5 {"monitorUpdatesEnabled":false}` {
+		t.Fatalf("calls %q", calls)
+	}
+	var got statusPageResourceModel
+	resp.State.Get(ctx, &got)
+	if got.MonitorUpdatesEnabled.ValueBool() {
+		t.Fatal("monitor_updates_enabled not read back as false")
 	}
 }

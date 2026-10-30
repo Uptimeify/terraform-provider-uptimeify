@@ -66,6 +66,7 @@ type statusPageModel struct {
 	SubscriptionsEnabled     types.Bool   `tfsdk:"subscriptions_enabled"`
 	SubscriptionDelayMinutes types.Int64  `tfsdk:"subscription_delay_minutes"`
 	IncludeCustomerMonitors  types.Bool   `tfsdk:"include_customer_monitors"`
+	MonitorUpdatesEnabled    types.Bool   `tfsdk:"monitor_updates_enabled"`
 	HiddenMonitors           types.Set    `tfsdk:"hidden_monitors"`
 	SMSSubscriptionsEnabled  types.Bool   `tfsdk:"sms_subscriptions_enabled"`
 	PushSubscriptionsEnabled types.Bool   `tfsdk:"push_subscriptions_enabled"`
@@ -97,6 +98,7 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 	m.SubscriptionsEnabled = types.BoolValue(p.SubscriptionsEnabled)
 	m.SubscriptionDelayMinutes = types.Int64Value(p.SubscriptionDelayMinutes)
 	m.IncludeCustomerMonitors = types.BoolValue(p.IncludeCustomerMonitors)
+	m.MonitorUpdatesEnabled = types.BoolValue(p.MonitorUpdatesEnabled)
 	elems := []attr.Value{} // never null: the attribute defaults to an empty set
 	for _, h := range p.HiddenMonitors {
 		elems = append(elems, types.ObjectValueMust(monitorRefAttrTypes, map[string]attr.Value{
@@ -217,6 +219,10 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "Also show every monitor of the customer (minus `hidden_monitors`) after the explicit components " +
 					"(`uptimeify_status_page_component`). `false` = only the components. Unset = the server default at creation " +
 					"(`false` for new pages; older app versions used `true` for pages with a customer), then kept as is."},
+			"monitor_updates_enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				Description: "Monitors write to the page: their state drives components and the page status, their incidents " +
+					"show in the history and reach subscribers. `false` = the page only shows what is reported manually; a " +
+					"monitoring incident reaches it only when explicitly linked. Default `true`."},
 			"hidden_monitors": schema.SetNestedAttribute{
 				Optional: true, Computed: true,
 				Default:     setdefault.StaticValue(types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil)),
@@ -301,6 +307,15 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 				plan.Slug.ValueString(), slug, id, delErr))
 		return
 	}
+	// The create endpoint does not take monitorUpdatesEnabled (server default true); a false goes in a PATCH.
+	if !plan.MonitorUpdatesEnabled.ValueBool() {
+		if err := r.client.UpdateStatusPage(ctx, id, map[string]any{"monitorUpdatesEnabled": false}); err != nil {
+			delErr := r.client.DeleteStatusPage(ctx, id)
+			resp.Diagnostics.AddError("Creating status page failed",
+				fmt.Sprintf("setting monitorUpdatesEnabled: %v. Cleanup of page %s: %v", err, id, delErr))
+			return
+		}
+	}
 	resp.Diagnostics.Append(r.readInto(ctx, id, &plan, &resp.State, "Creating status page failed")...)
 }
 
@@ -373,6 +388,9 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	if !plan.IncludeCustomerMonitors.IsUnknown() && !plan.IncludeCustomerMonitors.Equal(state.IncludeCustomerMonitors) {
 		patch["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
+	}
+	if !plan.MonitorUpdatesEnabled.Equal(state.MonitorUpdatesEnabled) {
+		patch["monitorUpdatesEnabled"] = plan.MonitorUpdatesEnabled.ValueBool()
 	}
 	if !plan.HiddenMonitors.Equal(state.HiddenMonitors) {
 		patch["hiddenMonitors"] = hiddenMonitorsToAPI(ctx, plan.HiddenMonitors)

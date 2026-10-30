@@ -42,11 +42,13 @@ resource "uptimeify_status_page" "platform" {
 }
 
 # Internal page: only members signed in through the organization's single sign-on, and only
-# from the office networks.
+# from the office networks. Monitors do not write to it: it shows only what is reported
+# manually and incidents that are explicitly linked.
 resource "uptimeify_status_page" "staff" {
-  name         = "Staff Status"
-  visibility   = "sso_members_only"
-  ip_allowlist = ["203.0.113.0/24", "2001:db8::/32"]
+  name                    = "Staff Status"
+  visibility              = "sso_members_only"
+  ip_allowlist            = ["203.0.113.0/24", "2001:db8::/32"]
+  monitor_updates_enabled = false
 }
 
 # Password-protected page; the password never lands in state.
@@ -86,6 +88,7 @@ variable "status_page_password" {
 - `ip_allowlist` (Set of String) Only visitors from these networks see the page (403 for everyone else), on top of `visibility`. CIDR ranges with explicit prefix and lowercase address (`203.0.113.0/24`, `203.0.113.5/32`, `2001:db8::/32`), at most 50. Default: none (no IP restriction). A page with a list has no badge, widget, feeds or subscriptions.
 - `is_published` (Boolean) Default `true`.
 - `management_type` (String) Ownership class like monitors: `managed` (the organization operates the page) or `self_service` (the customer operates it). Unset = the server default at creation (`managed`; a customer-bound token always creates `self_service`), then kept as is. Only organization-wide admin tokens may choose or change it (`managementTypeOrgOnly` otherwise).
+- `monitor_updates_enabled` (Boolean) Monitors write to the page: their state drives components and the page status, their incidents show in the history and reach subscribers. `false` = the page only shows what is reported manually; a monitoring incident reaches it only when explicitly linked. Default `true`.
 - `push_subscriptions_enabled` (Boolean) Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
 - `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota.

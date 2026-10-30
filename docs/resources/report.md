@@ -20,6 +20,9 @@ resource "uptimeify_report" "weekly" {
   send_hour        = 7
   format           = "email_pdf"
   recipient_emails = ["ops@example.com"]
+
+  # The status pages section is on by default; leave it out of this report.
+  include_status_pages = false
 }
 ```
 
@@ -37,6 +40,7 @@ resource "uptimeify_report" "weekly" {
 - `format` (String) `email` or `email_pdf` (default).
 - `frequency` (String) `daily`, `weekly` or `monthly` (default). Weekly needs `weekday`, monthly needs `day_of_month`.
 - `group_by_customer` (Boolean) Group by customer. Default `false`.
+- `include_status_pages` (Boolean) Append the status pages section (published state, customer, components, incidents, maintenance, subscribers). Scope `customers` lists those customers' pages, scope `tags` the pages showing a monitor with one of the tags. Default `true`.
 - `inclusion_mode` (String) `all` (default), `problems` or `threshold`.
 - `monitor_types` (List of String) Monitor types in the report (default: all ten).
 - `problem_signals` (Attributes) What counts as a problem for `inclusion_mode = "problems"`. (see [below for nested schema](#nestedatt--problem_signals))

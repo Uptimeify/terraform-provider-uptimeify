@@ -293,6 +293,7 @@ type Report struct {
 	MonitorTypes        []string                   `json:"monitorTypes"`
 	SectionsByType      map[string]map[string]bool `json:"sectionsByType"`
 	GroupByCustomer     bool                       `json:"groupByCustomer"`
+	IncludeStatusPages  bool                       `json:"includeStatusPages"`
 	Format              string                     `json:"format"`
 	RecipientEmails     []string                   `json:"recipientEmails"`
 	RecipientUserIDs    []string                   `json:"recipientUserIds"`

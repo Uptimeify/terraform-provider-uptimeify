@@ -27,11 +27,13 @@ resource "uptimeify_status_page" "platform" {
 }
 
 # Internal page: only members signed in through the organization's single sign-on, and only
-# from the office networks.
+# from the office networks. Monitors do not write to it: it shows only what is reported
+# manually and incidents that are explicitly linked.
 resource "uptimeify_status_page" "staff" {
-  name         = "Staff Status"
-  visibility   = "sso_members_only"
-  ip_allowlist = ["203.0.113.0/24", "2001:db8::/32"]
+  name                    = "Staff Status"
+  visibility              = "sso_members_only"
+  ip_allowlist            = ["203.0.113.0/24", "2001:db8::/32"]
+  monitor_updates_enabled = false
 }
 
 # Password-protected page; the password never lands in state.
