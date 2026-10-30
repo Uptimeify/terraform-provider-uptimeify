@@ -47,6 +47,7 @@ func (d *statusPageDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"subscriptions_enabled":      schema.BoolAttribute{Computed: true},
 			"subscription_delay_minutes": schema.Int64Attribute{Computed: true},
 			"include_customer_monitors":  schema.BoolAttribute{Computed: true, Description: "Every monitor of the customer appears after the components."},
+			"monitor_updates_enabled":    schema.BoolAttribute{Computed: true, Description: "Monitors write to the page (state, incidents, subscriber notifications); `false` = only manual reports and explicitly linked incidents."},
 			"hidden_monitors": schema.SetNestedAttribute{Computed: true, Description: "Monitors of the customer the page does not show.",
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"type": schema.StringAttribute{Computed: true},

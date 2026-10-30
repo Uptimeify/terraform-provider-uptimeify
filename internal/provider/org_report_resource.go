@@ -64,6 +64,7 @@ type reportModel struct {
 	MonitorTypes        types.List    `tfsdk:"monitor_types"`
 	SectionsByType      types.Map     `tfsdk:"sections_by_type"`
 	GroupByCustomer     types.Bool    `tfsdk:"group_by_customer"`
+	IncludeStatusPages  types.Bool    `tfsdk:"include_status_pages"`
 	Format              types.String  `tfsdk:"format"`
 	RecipientEmails     types.List    `tfsdk:"recipient_emails"`
 	RecipientUserIDs    types.List    `tfsdk:"recipient_user_ids"`
@@ -103,6 +104,7 @@ func (m *reportModel) fromAPI(ctx context.Context, r *client.Report) diag.Diagno
 	m.SectionsByType, d = types.MapValueFrom(ctx, reportSectionsByType, sbt)
 	add(d)
 	m.GroupByCustomer = types.BoolValue(r.GroupByCustomer)
+	m.IncludeStatusPages = types.BoolValue(r.IncludeStatusPages)
 	m.Format = types.StringValue(r.Format)
 	m.RecipientEmails, d = types.ListValueFrom(ctx, types.StringType, nonNil(r.RecipientEmails))
 	add(d)
@@ -182,6 +184,7 @@ func (m *reportModel) body(ctx context.Context) (map[string]any, diag.Diagnostic
 		b["sectionsByType"] = sbt
 	}
 	boolean("groupByCustomer", m.GroupByCustomer)
+	boolean("includeStatusPages", m.IncludeStatusPages)
 	str("format", m.Format)
 	list("recipientEmails", m.RecipientEmails, &[]string{})
 	list("recipientUserIds", m.RecipientUserIDs, &[]string{})
@@ -254,7 +257,10 @@ func (r *reportResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()},
 				Description:   "Per monitor type section switches, e.g. `{ website = { sslExpiry = false } }` (server-side key names)."},
 			"group_by_customer": optB("Group by customer. Default `false`."),
-			"format":            optS("`email` or `email_pdf` (default).", stringvalidator.OneOf("email", "email_pdf")),
+			"include_status_pages": optB("Append the status pages section (published state, customer, components, incidents, " +
+				"maintenance, subscribers). Scope `customers` lists those customers' pages, scope `tags` the pages showing a " +
+				"monitor with one of the tags. Default `true`."),
+			"format": optS("`email` or `email_pdf` (default).", stringvalidator.OneOf("email", "email_pdf")),
 			"recipient_emails": schema.ListAttribute{ElementType: types.StringType, Optional: true, Computed: true, PlanModifiers: keepL,
 				Validators: []validator.List{listvalidator.SizeAtMost(50)}},
 			"recipient_user_ids": schema.ListAttribute{ElementType: types.StringType, Optional: true, Computed: true, PlanModifiers: keepL,

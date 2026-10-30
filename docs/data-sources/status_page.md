@@ -44,6 +44,7 @@ data "uptimeify_status_page" "by_id" {
 - `ip_allowlist` (Set of String) CIDR ranges allowed to see the page; empty = no IP restriction.
 - `is_published` (Boolean)
 - `management_type` (String) `managed` or `self_service`.
+- `monitor_updates_enabled` (Boolean) Monitors write to the page (state, incidents, subscriber notifications); `false` = only manual reports and explicitly linked incidents.
 - `organization_id` (Number)
 - `public_id` (String)
 - `push_subscriptions_enabled` (Boolean)

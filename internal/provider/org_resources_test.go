@@ -410,6 +410,7 @@ func TestAccReport(t *testing.T) {
     incident_log = true, ssl_expiry = false, group_by_customer = false
   }
   recipient_emails = ["tfacc-report@example.test", "tfacc-report2@example.test"]
+  include_status_pages = false
 `
 	cfg := func(n, body string) string {
 		return imProviderBlock() + fmt.Sprintf(`
@@ -436,6 +437,7 @@ resource "uptimeify_report" "r" {
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "enabled", "true"),
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "timezone", "Europe/Berlin"),
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "monitor_types.#", "10"),
+					tfresource.TestCheckResourceAttr("uptimeify_report.r", "include_status_pages", "true"),
 					func(s *terraform.State) error {
 						reportID = s.RootModule().Resources["uptimeify_report.r"].Primary.ID
 						return nil
@@ -451,6 +453,7 @@ resource "uptimeify_report" "r" {
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "sections.worst_performers", "false"),
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "monitor_types.#", "2"),
 					tfresource.TestCheckResourceAttr("uptimeify_report.r", "recipient_emails.#", "2"),
+					tfresource.TestCheckResourceAttr("uptimeify_report.r", "include_status_pages", "false"),
 					func(s *terraform.State) error {
 						if got := s.RootModule().Resources["uptimeify_report.r"].Primary.ID; got != reportID {
 							return fmt.Errorf("report was replaced: %s -> %s", reportID, got)
@@ -573,4 +576,21 @@ resource "uptimeify_smtp_settings" "s" {
 			{Config: cfg("tfacc-2", 2)},
 		},
 	})
+}
+
+// Unit: include_status_pages round-trips (sent when known, read back from the API).
+func TestReportIncludeStatusPages(t *testing.T) {
+	ctx := context.Background()
+	m := reportModel{IncludeStatusPages: types.BoolValue(false)}
+	b, d := m.body(ctx)
+	if d.HasError() || b["includeStatusPages"] != false {
+		t.Fatalf("body %v %v", b, d)
+	}
+	m.IncludeStatusPages = types.BoolUnknown()
+	if b, _ = m.body(ctx); b["includeStatusPages"] != nil {
+		t.Fatalf("unknown sent: %v", b)
+	}
+	if d := m.fromAPI(ctx, &client.Report{IncludeStatusPages: true}); d.HasError() || !m.IncludeStatusPages.ValueBool() {
+		t.Fatalf("fromAPI %v %v", m.IncludeStatusPages, d)
+	}
 }
