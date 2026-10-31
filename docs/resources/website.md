@@ -114,7 +114,7 @@ resource "uptimeify_website" "nightly_backup" {
 - `expected_status_codes` (String) Comma-separated accepted status codes. Defaults to `200,301,302`.
 - `follow_redirects` (Boolean) Defaults to `true`.
 - `heartbeat_grace_period_minutes` (Number) Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.
-- `heartbeat_token_rotation` (String) Heartbeat monitors: any value; changing it to a new non-null value mints a new heartbeat token (`heartbeat_token` and `url` change). The old token stops working immediately, so update the pinging job in the same rollout. Setting it at create does not rotate.
+- `heartbeat_token_rotation` (String) Heartbeat monitors: any value; changing it to a new non-null value mints a new heartbeat token (`heartbeat_token` changes, `url` stays). The old token stops working immediately, so update the pinging job in the same rollout. Setting it at create does not rotate.
 - `http_method` (String) `GET`, `QUERY`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. Defaults to `GET`.
 - `max_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.
 - `min_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.
@@ -126,14 +126,14 @@ resource "uptimeify_website" "nightly_backup" {
 - `ssl_notice_days` (Number) Warn this many days before certificate expiry. Defaults to `7`.
 - `status` (String) `active`, `inactive` or `maintenance`. Defaults to `active`.
 - `timeout_seconds` (Number) Request timeout, 1 to 60. Defaults to `30`.
-- `url` (String) URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<token>` from the server, leave it unset there. Must resolve to a public address at create and update.
+- `url` (String) URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<monitor id>` from the server (the ping token is `heartbeat_token`), leave it unset there. Must resolve to a public address at create and update.
 
 ### Read-Only
 
 - `created_at` (String)
 - `has_custom_headers` (Boolean) Whether custom headers are stored.
 - `has_request_body` (Boolean) Whether a request body is stored.
-- `heartbeat_token` (String, Sensitive) Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token.
+- `heartbeat_token` (String, Sensitive) Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy.
 - `id` (String) Numeric website id.
 - `public_id` (String) Public UUID of the website.
 - `updated_at` (String)

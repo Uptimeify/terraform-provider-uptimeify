@@ -310,7 +310,7 @@ func (r *websiteResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"name":        schema.StringAttribute{Required: true, Validators: []validator.String{stringvalidator.LengthBetween(1, 255)}},
 			"url": schema.StringAttribute{
 				Optional: true, Computed: true, PlanModifiers: keepS,
-				Description: "URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<token>` from the server, leave it unset there. Must resolve to a public address at create and update.",
+				Description: "URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<monitor id>` from the server (the ping token is `heartbeat_token`), leave it unset there. Must resolve to a public address at create and update.",
 				Validators:  []validator.String{stringvalidator.LengthBetween(1, 2048)},
 			},
 			"monitoring_type": schema.StringAttribute{
@@ -394,10 +394,10 @@ func (r *websiteResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"domain_expiry_error_days":     optInt("Error this many days before domain expiry.", 7, int64validator.Between(0, 365)),
 			"min_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
 			"max_page_size":                schema.Int64Attribute{Optional: true, Description: "Bytes; dropped by the server while `check_size_enabled` is off.", Validators: []validator.Int64{int64validator.AtLeast(0)}},
-			"heartbeat_token":              schema.StringAttribute{Computed: true, Sensitive: true, PlanModifiers: keepS, Description: "Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token."},
+			"heartbeat_token":              schema.StringAttribute{Computed: true, Sensitive: true, PlanModifiers: keepS, Description: "Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy."},
 			"heartbeat_token_rotation": schema.StringAttribute{Optional: true,
 				Description: "Heartbeat monitors: any value; changing it to a new non-null value mints a new heartbeat token " +
-					"(`heartbeat_token` and `url` change). The old token stops working immediately, so update the pinging job in the same rollout. " +
+					"(`heartbeat_token` changes, `url` stays). The old token stops working immediately, so update the pinging job in the same rollout. " +
 					"Setting it at create does not rotate."},
 			"allow_duplicate": allowDuplicateAttr,
 			"heartbeat_grace_period_minutes": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepI,

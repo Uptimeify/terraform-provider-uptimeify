@@ -55,7 +55,7 @@ data "uptimeify_website" "api" {
 - `has_custom_headers` (Boolean) Whether custom headers are stored.
 - `has_request_body` (Boolean) Whether a request body is stored.
 - `heartbeat_grace_period_minutes` (Number) Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.
-- `heartbeat_token` (String, Sensitive) Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy. `url` (`heartbeat://<token>`) carries the same token.
+- `heartbeat_token` (String, Sensitive) Heartbeat monitors: token of the ping URL (server-generated). Sensitive: anyone with it can report the job as healthy.
 - `http_method` (String) `GET`, `QUERY`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. Defaults to `GET`.
 - `max_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.
 - `min_page_size` (Number) Bytes; dropped by the server while `check_size_enabled` is off.
@@ -68,4 +68,4 @@ data "uptimeify_website" "api" {
 - `status` (String) `active`, `inactive` or `maintenance`. Defaults to `active`.
 - `timeout_seconds` (Number) Request timeout, 1 to 60. Defaults to `30`.
 - `updated_at` (String)
-- `url` (String) URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<token>` from the server, leave it unset there. Must resolve to a public address at create and update.
+- `url` (String) URL with protocol; required except for heartbeat monitors. Heartbeat monitors get `heartbeat://<monitor id>` from the server (the ping token is `heartbeat_token`), leave it unset there. Must resolve to a public address at create and update.
