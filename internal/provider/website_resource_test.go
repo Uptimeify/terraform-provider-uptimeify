@@ -125,8 +125,9 @@ func TestAccWebsite(t *testing.T) {
 		if hb["heartbeat_token"] == "" || hb["heartbeat_token"] == hbToken {
 			return fmt.Errorf("heartbeat token not rotated: %q -> %q", hbToken, hb["heartbeat_token"])
 		}
-		if hb["url"] != "heartbeat://"+hb["heartbeat_token"] {
-			return fmt.Errorf("heartbeat url %q does not carry the new token", hb["url"])
+		// Since app migration 0337 url names the monitor and never carries the token.
+		if hb["url"] != "heartbeat://"+hb["public_id"] {
+			return fmt.Errorf("heartbeat url %q is not heartbeat://<public_id>", hb["url"])
 		}
 		return nil
 	}
