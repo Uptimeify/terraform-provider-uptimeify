@@ -3,12 +3,12 @@
 page_title: "uptimeify_status_page_component Resource - uptimeify"
 subcategory: ""
 description: |-
-  One component (row) of a status page: a monitor, a manually set status, or a third-party provider (dependency) whose published status it follows. At most 100 per page. Import with <status_page_id>/<component_id>.
+  One component (row) of a status page: a monitor, a manually set status, or a third-party provider (dependency) whose published status it follows. At most 500 per page. Import with <status_page_id>/<component_id>.
 ---
 
 # uptimeify_status_page_component (Resource)
 
-One component (row) of a status page: a monitor, a manually set status, or a third-party provider (`dependency`) whose published status it follows. At most 100 per page. Import with `<status_page_id>/<component_id>`.
+One component (row) of a status page: a monitor, a manually set status, or a third-party provider (`dependency`) whose published status it follows. At most 500 per page. Import with `<status_page_id>/<component_id>`.
 
 ## Example Usage
 

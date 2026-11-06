@@ -60,6 +60,13 @@
     "status",
     "timeoutSeconds"
   ],
+  "PATCH /api/im/services/{id}": [
+    "criticality",
+    "description",
+    "monitors",
+    "name",
+    "ownerTeamId"
+  ],
   "PATCH /api/imap-pop-monitors/{id}": [
     "allowedCheckCountryCodes",
     "checkInterval",
@@ -332,6 +339,13 @@
     "name",
     "status",
     "timeoutSeconds"
+  ],
+  "POST /api/im/services": [
+    "criticality",
+    "description",
+    "monitors",
+    "name",
+    "ownerTeamId"
   ],
   "POST /api/imap-pop-monitors": [
     "allowDuplicate",

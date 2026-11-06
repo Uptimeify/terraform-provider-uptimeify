@@ -194,6 +194,24 @@ type IMSchedule struct {
 	StartsOnDateOfMonth *int64         `json:"startsOnDateOfMonth"`
 	StartsOnTime        *string        `json:"startsOnTime"`
 	Rotations           []IMRotation   `json:"rotations"`
+	OrganizationID      int64          `json:"organizationId"`
+	CreatedAt           string         `json:"createdAt"`
+	UpdatedAt           string         `json:"updatedAt"`
+	Team                *struct {
+		Name string `json:"name"`
+	} `json:"team"`
+}
+
+// IMScheduleListItem is one row of GET /api/im/schedules.
+type IMScheduleListItem struct {
+	ID     int64  `json:"id"`
+	TeamID int64  `json:"teamId"`
+	Name   string `json:"name"`
+}
+
+func (c *Client) ListIMSchedules(ctx context.Context) ([]IMScheduleListItem, error) {
+	var env itemsEnvelope[IMScheduleListItem]
+	return env.Items, c.Do(ctx, http.MethodGet, imPath("schedules?envelope=items"), nil, &env)
 }
 
 func (c *Client) GetIMSchedule(ctx context.Context, id int64) (*IMSchedule, error) {

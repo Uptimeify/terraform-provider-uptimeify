@@ -34,7 +34,8 @@ resource "uptimeify_status_page" "acme" {
 
 # A page of the whole organization: no customer, only the explicit components
 # (uptimeify_status_page_component), which may come from any customer. Visitors may also
-# subscribe by SMS and browser push.
+# subscribe by SMS and browser push. sms_subscriptions_enabled = true needs SMS quota (included SMS
+# left or overage enabled), otherwise the apply fails with 403 smsQuotaRequired.
 resource "uptimeify_status_page" "platform" {
   name                       = "Platform Status"
   sms_subscriptions_enabled  = true
@@ -91,7 +92,7 @@ variable "status_page_password" {
 - `monitor_updates_enabled` (Boolean) Monitors write to the page: their state drives components and the page status, their incidents show in the history and reach subscribers. `false` = the page only shows what is reported manually; a monitoring incident reaches it only when explicitly linked. Default `true`.
 - `push_subscriptions_enabled` (Boolean) Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
-- `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota.
+- `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota. Turning it on without SMS quota (no included SMS left and no overage) fails the apply with 403 `smsQuotaRequired`; a page that already has it on keeps it.
 - `subscription_delay_minutes` (Number) Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.
 - `subscriptions_enabled` (Boolean) Visitors may subscribe to e-mail updates. Default `true`.
 - `visibility` (String) `public` (default), `customer_members_only`, `password_protected` or `sso_members_only`. `password_protected` needs a password: set `access_password_wo`, or keep one set earlier. `sso_members_only` is `customer_members_only` plus a session from the organization's single sign-on (`uptimeify_sso_oidc`); without verified SSO the API refuses it (`ssoNotConfigured`).

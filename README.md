@@ -93,7 +93,7 @@ configuration together with their `*_wo_version` after the import.
 
 ## What you can manage
 
-Everything the Uptimeify API allows an API token to change: 48 resources and 25 data sources.
+Everything the Uptimeify API allows an API token to change: 49 resources and 26 data sources.
 
 | Area | Resources |
 | --- | --- |
@@ -101,12 +101,12 @@ Everything the Uptimeify API allows an API token to change: 48 resources and 25 
 | Organizing | `tag`, `monitor_tag`, `custom_field`, `maintenance_window` |
 | Alerting | `notification_channel`, `escalation_config` |
 | Customers | `customer`, `customer_ip`, `customer_domain`, `package_config` |
-| Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings`, `user_notification_settings`, `notification_template` |
+| Incident management | `im_team`, `im_team_member`, `im_escalation_tier`, `im_schedule`, `im_schedule_override`, `im_team_override`, `im_service`, `im_alert_source`, `im_routing_rule`, `im_channel`, `im_outbound_integration`, `im_statuspage_rule`, `im_org_settings`, `user_notification_settings`, `notification_template` |
 | Status pages | `status_page`, `status_page_design`, `status_page_audience_groups`, `status_page_component`, `status_page_component_group`, `status_page_maintenance`, `status_page_domain`, `status_page_domain_activation` |
 | Organization | `organization_settings`, `organization_branding`, `whitelabel_domain`, `report`, `smtp_settings`, `user`, `sso_oidc`, `sso_domain_verification` |
 
 All names carry the `uptimeify_` prefix. Data sources cover the monitors and the lookups you need to
-wire things together, for example `uptimeify_customer` and `uptimeify_im_team` by name,
+wire things together, for example `uptimeify_customer`, `uptimeify_im_team` and `uptimeify_im_schedule` by name,
 `uptimeify_im_on_call`, `uptimeify_monitoring_locations` and `uptimeify_package_configs`.
 Full reference for every attribute, with guides for customer tokens, import and secrets: [docs.uptimeify.io/terraform](https://docs.uptimeify.io/terraform) (German: [docs.uptimeify.io/de/terraform](https://docs.uptimeify.io/de/terraform)).
 
