@@ -51,6 +51,7 @@ type Website struct {
 	MaxPageSize                  *int64   `json:"maxPageSize"`
 	HeartbeatToken               *string  `json:"heartbeatToken"`
 	HeartbeatGracePeriodMinutes  *int64   `json:"heartbeatGracePeriodMinutes"`
+	ExpectedState                string   `json:"expectedState"`
 	HasCustomHeaders             bool     `json:"hasCustomHeaders"`
 	HasRequestBody               bool     `json:"hasRequestBody"`
 	CreatedAt                    string   `json:"createdAt"`

@@ -50,6 +50,7 @@ data "uptimeify_website" "api" {
 - `expected_response_json_path` (String)
 - `expected_response_match_type` (String) `contains`, `equals` or `json_path_equals` (needs `expected_response_json_path`). Defaults to `contains`.
 - `expected_response_value` (String)
+- `expected_state` (String) Heartbeat monitors only: `up` alerts when pings stop; `down` inverts the monitor, a ping is an outage and silence beyond the interval plus `heartbeat_grace_period_minutes` counts as OK. Other types accept only `up` (the API answers 400 `expectedStateNotSupported`). Defaults to `up`.
 - `expected_status_codes` (String) Comma-separated accepted status codes. Defaults to `200,301,302`.
 - `follow_redirects` (Boolean) Defaults to `true`.
 - `has_custom_headers` (Boolean) Whether custom headers are stored.

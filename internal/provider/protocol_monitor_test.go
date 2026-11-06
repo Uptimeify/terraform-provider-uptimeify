@@ -317,19 +317,23 @@ func TestAccTCPMonitor(t *testing.T) {
 		fmt.Sprintf(`
   name          = "%s-2"
   hostname      = "8.8.8.8"
-  port          = 53
-  expect_banner = "hello"
-  status        = "disabled"
+  port           = 53
+  expect_banner  = "hello"
+  expected_state = "down"
+  status         = "disabled"
 `, name),
 		tfresource.ComposeAggregateTestCheckFunc(
 			tfresource.TestCheckResourceAttr(a, "port", "443"),
 			tfresource.TestCheckNoResourceAttr(a, "expect_banner"),
+			tfresource.TestCheckResourceAttr(a, "expected_state", "up"),
 		),
 		tfresource.ComposeAggregateTestCheckFunc(
 			tfresource.TestCheckResourceAttr(a, "hostname", "8.8.8.8"),
 			tfresource.TestCheckResourceAttr(a, "port", "53"),
 			tfresource.TestCheckResourceAttr(a, "expect_banner", "hello"),
 			tfresource.TestCheckResourceAttr("data.uptimeify_tcp_monitor.by_id", "expect_banner", "hello"),
+			tfresource.TestCheckResourceAttr(a, "expected_state", "down"),
+			tfresource.TestCheckResourceAttr("data.uptimeify_tcp_monitor.by_id", "expected_state", "down"),
 		),
 	)
 }

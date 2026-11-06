@@ -177,10 +177,10 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Description: "Cap for self-service monitors. Unset = package default. " + overrideNote},
 			"can_edit_managed": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
 				Description: "Customer logins may edit managed monitors. " + overrideNote},
-			"enable_email_alerts":            override("Email alerts."),
-			"enable_sms_alerts":              override("SMS alerts."),
-			"enable_webhook_alerts":          override("Webhook alerts."),
-			"enable_integration_alerts":      override("Integration alerts (Slack, PagerDuty, ...)."),
+			"enable_email_alerts":            override("Whether the organization's own email notifications alert about this customer. " + alertSwitchNote),
+			"enable_sms_alerts":              override("Whether the organization's own SMS notifications alert about this customer. " + alertSwitchNote + " " + smsLimitNote),
+			"enable_webhook_alerts":          override("Whether the organization's own webhook notifications alert about this customer. " + alertSwitchNote),
+			"enable_integration_alerts":      override("Whether the organization's own integration notifications (Slack, PagerDuty, ...) alert about this customer. " + alertSwitchNote),
 			"enable_post_request_escalation": override("POST request escalation."),
 			"delete_user_action": schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("deactivate"),
 				Description: "On destroy, logins assigned only to this customer are `deactivate`d (default) or `delete`d.",
@@ -190,6 +190,15 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		},
 	}
 }
+
+// alertSwitchNote: since 05.11.2026 (website-monitoring #680/#683) the enable_*_alerts switches of
+// package and customer govern the organization's notifications only.
+const alertSwitchNote = "Covers only notifications to the organization (its own channels and the organization " +
+	"recipient of the email/SMS fallback); channels the customer created in their own account are never affected, the " +
+	"customer stops those by disabling or deleting them. A set value replaces the package value for this customer."
+
+const smsLimitNote = "Exception: SMS through the customer's own channels still counts against the package's monthly SMS " +
+	"limit per customer and the organization's overage limit; with the package SMS switch off and no limit set, that limit is 0."
 
 const overrideNote = "Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the " +
 	"API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected)."

@@ -203,15 +203,16 @@ func (c *Client) ActivateStatusPageDomain(ctx context.Context, id int64) (*Statu
 
 // ImStatuspageRule: incidents of a team at minSeverity or worse set a status page to targetState.
 type ImStatuspageRule struct {
-	ID             int64  `json:"id"`
-	OrganizationID int64  `json:"organizationId"`
-	TeamID         int64  `json:"teamId"`
-	StatusPageID   int64  `json:"statusPageId"`
-	MinSeverity    string `json:"minSeverity"`
-	TargetState    string `json:"targetState"`
-	AutoResolve    bool   `json:"autoResolve"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
+	ID             int64   `json:"id"`
+	OrganizationID int64   `json:"organizationId"`
+	TeamID         int64   `json:"teamId"`
+	StatusPageID   int64   `json:"statusPageId"`
+	MinSeverity    string  `json:"minSeverity"`
+	TargetState    string  `json:"targetState"`
+	AutoResolve    bool    `json:"autoResolve"`
+	Message        *string `json:"message"`
+	CreatedAt      string  `json:"createdAt"`
+	UpdatedAt      string  `json:"updatedAt"`
 }
 
 func imRulePath(id string) string { return "/api/im/statuspage-rules/" + url.PathEscape(id) }

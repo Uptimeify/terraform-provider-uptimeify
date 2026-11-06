@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"cmp"
 	"context"
 	"maps"
 	"regexp"
@@ -299,8 +300,9 @@ func (m *dnsMonitorModel) read(ctx context.Context, row *client.MonitorRow) diag
 
 type tcpMonitorModel struct {
 	monitorBase
-	Port         types.Int64  `tfsdk:"port"`
-	ExpectBanner types.String `tfsdk:"expect_banner"`
+	Port          types.Int64  `tfsdk:"port"`
+	ExpectBanner  types.String `tfsdk:"expect_banner"`
+	ExpectedState types.String `tfsdk:"expected_state"`
 }
 
 var tcpMonitorSpec = monitorSpec{
@@ -318,11 +320,18 @@ var tcpMonitorSpec = monitorSpec{
 			Description: "Text the server's greeting must contain, at most 255 characters.",
 			Validators:  []validator.String{stringvalidator.LengthBetween(1, 255)},
 		},
+		"expected_state": schema.StringAttribute{
+			Optional: true, Computed: true, Default: stringdefault.StaticString("up"),
+			Description: "`up` (default) alerts when the port is not reachable. `down` inverts the monitor: an open " +
+				"connection is an outage; refused, timeout, reset and unreachable count as OK. A DNS failure stays an outage.",
+			Validators: []validator.String{stringvalidator.OneOf("up", "down")},
+		},
 	},
 }
 
 func (m *tcpMonitorModel) put(_ context.Context, b *bodyBuilder, _, prior *tcpMonitorModel) diag.Diagnostics {
 	b.put("port", m.Port, prior.Port, m.Port.ValueInt64())
+	b.put("expectedState", m.ExpectedState, prior.ExpectedState, m.ExpectedState.ValueString())
 	if b.changed(m.ExpectBanner, prior.ExpectBanner) {
 		// PATCH merges config; "" removes the banner (the API has no way to delete the key).
 		b.body["config"] = map[string]any{"expectBanner": m.ExpectBanner.ValueString()}
@@ -333,6 +342,7 @@ func (m *tcpMonitorModel) put(_ context.Context, b *bodyBuilder, _, prior *tcpMo
 func (m *tcpMonitorModel) read(_ context.Context, row *client.MonitorRow) diag.Diagnostics {
 	m.Port = types.Int64PointerValue(row.Port)
 	m.ExpectBanner = cfgString(row.Config["expectBanner"])
+	m.ExpectedState = types.StringValue(cmp.Or(row.ExpectedState, "up"))
 	return nil
 }
 

@@ -570,7 +570,8 @@ resource "uptimeify_im_statuspage_rule" "r" {
 	}
 	step2 := rule(`min_severity = "sev1"
   target_state = "warning"
-  auto_resolve = false`)
+  auto_resolve = false
+  message      = "We are looking into it."`)
 
 	tfresource.Test(t, tfresource.TestCase{
 		PreCheck:                 func() { accPreCheck(t) },
@@ -593,6 +594,7 @@ data "uptimeify_im_statuspage_rule" "by_id" { id = uptimeify_im_statuspage_rule.
 					tfresource.TestCheckResourceAttr(r, "min_severity", "sev2"),
 					tfresource.TestCheckResourceAttr(r, "target_state", "degraded"),
 					tfresource.TestCheckResourceAttr(r, "auto_resolve", "true"),
+					tfresource.TestCheckNoResourceAttr(r, "message"),
 					tfresource.TestCheckResourceAttrSet(r, "organization_id"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_statuspage_rule.by_id", "min_severity", r, "min_severity"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_statuspage_rule.by_id", "status_page_id", r, "status_page_id"),
@@ -605,6 +607,7 @@ data "uptimeify_im_statuspage_rule" "by_id" { id = uptimeify_im_statuspage_rule.
 					tfresource.TestCheckResourceAttr(r, "min_severity", "sev1"),
 					tfresource.TestCheckResourceAttr(r, "target_state", "warning"),
 					tfresource.TestCheckResourceAttr(r, "auto_resolve", "false"),
+					tfresource.TestCheckResourceAttr(r, "message", "We are looking into it."),
 				),
 			},
 			{ResourceName: r, ImportState: true, ImportStateVerify: true},

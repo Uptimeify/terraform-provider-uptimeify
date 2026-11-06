@@ -27,6 +27,7 @@ type MonitorRow struct {
 	CheckMode                string         `json:"checkMode"`
 	Config                   map[string]any `json:"config"`
 	DNSConfig                *DNSConfig     `json:"dnsConfig"`
+	ExpectedState            string         `json:"expectedState"` // tcp only: up | down
 }
 
 // DNSConfig is dnsConfigView of the contract (stored normalized: upper-case types, trimmed values).
