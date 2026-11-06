@@ -49,3 +49,14 @@ resource "uptimeify_website" "nightly_backup" {
   # immediately, so roll out the new ping URL in the same change.
   heartbeat_token_rotation = "2026-10"
 }
+
+# Inverted heartbeat: a ping is an outage (e.g. a failover script that must
+# never fire); silence beyond interval + grace counts as OK.
+resource "uptimeify_website" "failover_never_runs" {
+  customer_id                    = tonumber(data.uptimeify_customer.shop.id)
+  name                           = "Failover not triggered"
+  monitoring_type                = "heartbeat"
+  check_interval                 = 60
+  heartbeat_grace_period_minutes = 5
+  expected_state                 = "down"
+}

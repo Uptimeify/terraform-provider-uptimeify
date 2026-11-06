@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"regexp"
@@ -78,6 +79,7 @@ type websiteModel struct {
 	MaxPageSize                  types.Int64  `tfsdk:"max_page_size"`
 	HeartbeatToken               types.String `tfsdk:"heartbeat_token"`
 	HeartbeatGracePeriodMinutes  types.Int64  `tfsdk:"heartbeat_grace_period_minutes"`
+	ExpectedState                types.String `tfsdk:"expected_state"`
 	HasCustomHeaders             types.Bool   `tfsdk:"has_custom_headers"`
 	HasRequestBody               types.Bool   `tfsdk:"has_request_body"`
 	CreatedAt                    types.String `tfsdk:"created_at"`
@@ -143,6 +145,7 @@ func (m *websiteModel) fromAPI(ctx context.Context, w *client.Website) diag.Diag
 	m.MaxPageSize = types.Int64PointerValue(w.MaxPageSize)
 	m.HeartbeatToken = types.StringPointerValue(w.HeartbeatToken)
 	m.HeartbeatGracePeriodMinutes = types.Int64PointerValue(w.HeartbeatGracePeriodMinutes)
+	m.ExpectedState = types.StringValue(cmp.Or(w.ExpectedState, "up"))
 	m.HasCustomHeaders = types.BoolValue(w.HasCustomHeaders)
 	m.HasRequestBody = types.BoolValue(w.HasRequestBody)
 	m.CreatedAt = types.StringValue(w.CreatedAt)
@@ -202,6 +205,7 @@ var websiteFields = []websiteField{
 	{"minPageSize", func(m *websiteModel) attr.Value { return m.MinPageSize }, true, true},
 	{"maxPageSize", func(m *websiteModel) attr.Value { return m.MaxPageSize }, true, true},
 	{"heartbeatGracePeriodMinutes", func(m *websiteModel) attr.Value { return m.HeartbeatGracePeriodMinutes }, false, true},
+	{"expectedState", func(m *websiteModel) attr.Value { return m.ExpectedState }, false, true},
 }
 
 // jsonValue turns a known framework value into its JSON form; null becomes nil.
@@ -402,6 +406,9 @@ func (r *websiteResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"allow_duplicate": allowDuplicateAttr,
 			"heartbeat_grace_period_minutes": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepI,
 				Description: "Heartbeat monitors: minutes a ping may be late. Server default 5; null for other types.", Validators: []validator.Int64{int64validator.Between(1, 10080)}},
+			"expected_state": optStr("Heartbeat monitors only: `up` alerts when pings stop; `down` inverts the monitor, a ping is an outage and "+
+				"silence beyond the interval plus `heartbeat_grace_period_minutes` counts as OK. Other types accept only `up` "+
+				"(the API answers 400 `expectedStateNotSupported`).", "up", stringvalidator.OneOf("up", "down")),
 			"has_custom_headers": schema.BoolAttribute{Computed: true, Description: "Whether custom headers are stored."},
 			"has_request_body":   schema.BoolAttribute{Computed: true, Description: "Whether a request body is stored."},
 			"created_at":         schema.StringAttribute{Computed: true, PlanModifiers: keepS},

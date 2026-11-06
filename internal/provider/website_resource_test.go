@@ -93,6 +93,13 @@ func TestWebsiteUpdateBody(t *testing.T) {
 		t.Fatal("a secret change needs the full mode")
 	}
 
+	plan = base
+	plan.ExpectedState = types.StringValue("down")
+	body, full = websiteUpdateBody(&plan, &base, false)
+	if full || len(body) != 1 || body["expectedState"] != "down" {
+		t.Fatalf("expected state goes partial: full=%v body=%v", full, body)
+	}
+
 	// After a full update: re-apply only the partial-mode values the server coerced.
 	got := base
 	got.SSLErrorDays = types.Int64Value(3)
@@ -144,7 +151,7 @@ func TestAccWebsite(t *testing.T) {
   search_term           = "tfacc"`}
 	step2 := step1 // partial mode only
 	step2.name, step2.interval, step2.codes = name+"-2", 15, "200,204"
-	step2.hbRotation = "r1"
+	step2.hbRotation, step2.hbState = "r1", "down"
 	step3 := step2 // full mode: method, countries, new headers, basic auth
 	step3.method, step3.countries, step3.headersVer, step3.basicAuth = "GET", `["DE", "NL"]`, 2, true
 	// Keyword check and search term removed in the same full update (DeepL 29.10.2026).
@@ -187,6 +194,8 @@ func TestAccWebsite(t *testing.T) {
 					tfresource.TestCheckResourceAttrPair(r, "customer_id", "data.uptimeify_customer.c", "id"),
 					tfresource.TestCheckResourceAttr("uptimeify_website.hb", "monitoring_type", "heartbeat"),
 					tfresource.TestCheckResourceAttr("uptimeify_website.hb", "heartbeat_grace_period_minutes", "10"),
+					tfresource.TestCheckResourceAttr("uptimeify_website.hb", "expected_state", "up"),
+					tfresource.TestCheckResourceAttr(r, "expected_state", "up"),
 					tfresource.TestCheckResourceAttrSet("uptimeify_website.hb", "heartbeat_token"),
 					func(s *terraform.State) error {
 						hb := s.RootModule().Resources["uptimeify_website.hb"].Primary.Attributes
@@ -208,6 +217,7 @@ data "uptimeify_website" "by_id" { id = uptimeify_website.http.public_id }
 					tfresource.TestCheckResourceAttr(r, "check_interval", "15"),
 					tfresource.TestCheckResourceAttr(r, "expected_status_codes", "200,204"),
 					tfresource.TestCheckResourceAttr(r, "http_method", "POST"),
+					tfresource.TestCheckResourceAttr("uptimeify_website.hb", "expected_state", "down"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_website.by_id", "name", r, "name"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_website.by_id", "connect_host", r, "connect_host"),
 					tfresource.TestCheckResourceAttr("data.uptimeify_website.by_id", "has_custom_headers", "true"),
@@ -261,7 +271,7 @@ type websiteStep struct {
 	name, url, codes, countries, method string
 	interval, headersVer                int
 	basicAuth                           bool
-	hbRotation, checks                  string
+	hbRotation, hbState, checks         string
 }
 
 func (s websiteStep) config(t *testing.T) string {
@@ -276,6 +286,9 @@ func (s websiteStep) config(t *testing.T) string {
 	rotation := ""
 	if s.hbRotation != "" {
 		rotation = fmt.Sprintf("heartbeat_token_rotation = %q", s.hbRotation)
+	}
+	if s.hbState != "" {
+		rotation += fmt.Sprintf("\n  expected_state = %q", s.hbState)
 	}
 	return accCustomerConfig(t) + fmt.Sprintf(`
 resource "uptimeify_website" "http" {

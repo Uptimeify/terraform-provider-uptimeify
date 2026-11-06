@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -30,6 +31,9 @@ var (
 
 type imStatuspageRuleResource struct{ client *client.Client }
 
+// ruleMessageText is trimmedText for multi-line text: the API trims the message (normalizeRuleMessage).
+var ruleMessageText = stringvalidator.RegexMatches(regexp.MustCompile(`(?s)^\S(.*\S)?$`), "must not be empty or have surrounding whitespace")
+
 // imStatuspageRuleModel is shared by the uptimeify_im_statuspage_rule resource and data source.
 type imStatuspageRuleModel struct {
 	ID             types.String `tfsdk:"id"`
@@ -39,6 +43,7 @@ type imStatuspageRuleModel struct {
 	MinSeverity    types.String `tfsdk:"min_severity"`
 	TargetState    types.String `tfsdk:"target_state"`
 	AutoResolve    types.Bool   `tfsdk:"auto_resolve"`
+	Message        types.String `tfsdk:"message"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
 }
@@ -51,6 +56,7 @@ func (m *imStatuspageRuleModel) fromAPI(r *client.ImStatuspageRule) {
 	m.MinSeverity = types.StringValue(r.MinSeverity)
 	m.TargetState = types.StringValue(r.TargetState)
 	m.AutoResolve = types.BoolValue(r.AutoResolve)
+	m.Message = types.StringPointerValue(r.Message)
 	m.CreatedAt = types.StringValue(r.CreatedAt)
 	m.UpdatedAt = types.StringValue(r.UpdatedAt)
 }
@@ -82,6 +88,10 @@ func (r *imStatuspageRuleResource) Schema(_ context.Context, _ resource.SchemaRe
 				Validators:  []validator.String{stringvalidator.OneOf(client.StatusPageTargetStates...)}},
 			"auto_resolve": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Reset the page when the incident resolves. Default `true`."},
+			"message": schema.StringAttribute{Optional: true,
+				Description: "Public text shown on the status page while this rule's override is active and the incident " +
+					"has no status page update yet. Up to 5000 characters, no surrounding whitespace (the API trims). Unset = no text.",
+				Validators: []validator.String{ruleMessageText, stringvalidator.LengthAtMost(5000)}},
 			"created_at": schema.StringAttribute{Computed: true, PlanModifiers: keep},
 			"updated_at": schema.StringAttribute{Computed: true},
 		},
@@ -103,7 +113,7 @@ func (r *imStatuspageRuleResource) Create(ctx context.Context, req resource.Crea
 	rule, err := r.client.CreateImStatuspageRule(ctx, map[string]any{
 		"teamId": plan.TeamID.ValueInt64(), "statusPageId": plan.StatusPageID.ValueInt64(),
 		"minSeverity": plan.MinSeverity.ValueString(), "targetState": plan.TargetState.ValueString(),
-		"autoResolve": plan.AutoResolve.ValueBool(),
+		"autoResolve": plan.AutoResolve.ValueBool(), "message": plan.Message.ValueStringPointer(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Creating status page rule failed", err.Error())
@@ -155,6 +165,9 @@ func (r *imStatuspageRuleResource) Update(ctx context.Context, req resource.Upda
 	if !plan.AutoResolve.Equal(state.AutoResolve) {
 		patch["autoResolve"] = plan.AutoResolve.ValueBool()
 	}
+	if !plan.Message.Equal(state.Message) {
+		patch["message"] = plan.Message.ValueStringPointer() // null clears it
+	}
 	rule, err := r.client.UpdateImStatuspageRule(ctx, state.ID.ValueString(), patch)
 	if err != nil {
 		resp.Diagnostics.AddError("Updating status page rule failed", err.Error())
@@ -200,6 +213,7 @@ func (d *imStatuspageRuleDataSource) Schema(_ context.Context, _ datasource.Sche
 			"min_severity":    dschema.StringAttribute{Computed: true},
 			"target_state":    dschema.StringAttribute{Computed: true},
 			"auto_resolve":    dschema.BoolAttribute{Computed: true},
+			"message":         dschema.StringAttribute{Computed: true},
 			"created_at":      dschema.StringAttribute{Computed: true},
 			"updated_at":      dschema.StringAttribute{Computed: true},
 		},

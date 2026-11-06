@@ -29,6 +29,7 @@ data "uptimeify_im_statuspage_rule" "acme" {
 
 - `auto_resolve` (Boolean)
 - `created_at` (String)
+- `message` (String)
 - `min_severity` (String)
 - `organization_id` (Number)
 - `status_page_id` (Number)

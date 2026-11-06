@@ -14,13 +14,15 @@ An Incident Management status page rule: incidents of `team_id` at `min_severity
 
 ```terraform
 # sev1 incidents of the on-call team set the ACME status page to degraded,
-# and reset it when the incident resolves.
+# and reset it when the incident resolves. message is the public text until the
+# incident gets its first status page update.
 resource "uptimeify_im_statuspage_rule" "acme" {
   team_id        = tonumber(uptimeify_im_team.oncall.id)
   status_page_id = tonumber(uptimeify_status_page.acme.id)
   min_severity   = "sev1"
   target_state   = "degraded"
   auto_resolve   = true
+  message        = "We are investigating an outage and will post updates here."
 }
 ```
 
@@ -35,6 +37,7 @@ resource "uptimeify_im_statuspage_rule" "acme" {
 ### Optional
 
 - `auto_resolve` (Boolean) Reset the page when the incident resolves. Default `true`.
+- `message` (String) Public text shown on the status page while this rule's override is active and the incident has no status page update yet. Up to 5000 characters, no surrounding whitespace (the API trims). Unset = no text.
 - `min_severity` (String) `sev1` (most severe) to `sev4`. Default `sev2`.
 - `target_state` (String) `warning` or `degraded` (default).
 

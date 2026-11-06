@@ -32,6 +32,7 @@ data "uptimeify_tcp_monitor" "this" {
 - `created_at` (String)
 - `customer_id` (Number) Customer the monitor belongs to. Changing it moves the monitor to another customer of the same organization in place.
 - `expect_banner` (String) Text the server's greeting must contain, at most 255 characters.
+- `expected_state` (String) `up` (default) alerts when the port is not reachable. `down` inverts the monitor: an open connection is an outage; refused, timeout, reset and unreachable count as OK. A DNS failure stays an outage.
 - `hostname` (String) Host name or IP address only: no scheme, no path, no spaces.
 - `management_type` (String) `managed` or `self_service`. Only organization writers choose it; customer tokens always get `self_service`. Defaults to `managed`.
 - `name` (String) Display name, 1 to 255 characters.
