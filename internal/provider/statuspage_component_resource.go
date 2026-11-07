@@ -73,7 +73,7 @@ func (r *statusPageComponentResource) Schema(_ context.Context, _ resource.Schem
 	replaceS := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
 		Description: "One component (row) of a status page: a monitor, a manually set status, or a third-party provider " +
-			"(`dependency`) whose published status it follows. At most 100 per page. Import with `<status_page_id>/<component_id>`.",
+			"(`dependency`) whose published status it follows. At most 500 per page. Import with `<status_page_id>/<component_id>`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keepS, Description: "`<status_page_id>/<component_id>`."},
 			"status_page_id": schema.Int64Attribute{Required: true, Description: "Numeric status page id. Changing it replaces the component.",

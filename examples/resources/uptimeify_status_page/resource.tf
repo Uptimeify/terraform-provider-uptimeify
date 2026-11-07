@@ -19,7 +19,8 @@ resource "uptimeify_status_page" "acme" {
 
 # A page of the whole organization: no customer, only the explicit components
 # (uptimeify_status_page_component), which may come from any customer. Visitors may also
-# subscribe by SMS and browser push.
+# subscribe by SMS and browser push. sms_subscriptions_enabled = true needs SMS quota (included SMS
+# left or overage enabled), otherwise the apply fails with 403 smsQuotaRequired.
 resource "uptimeify_status_page" "platform" {
   name                       = "Platform Status"
   sms_subscriptions_enabled  = true

@@ -63,6 +63,8 @@ var parityEndpoints = map[string]func() resource.Resource{
 	"PATCH /api/imap-pop-monitors/{id}":                NewIMAPPopMonitorResource,
 	"PUT /api/im/users/{userId}/notification-settings": NewUserNotificationSettingsResource,
 	"PUT /api/im/notification-template":                NewNotificationTemplateResource,
+	"POST /api/im/services":                            NewIMServiceResource,
+	"PATCH /api/im/services/{id}":                      NewIMServiceResource,
 	"POST /api/organization/reports":                   NewReportResource,
 	"PATCH /api/organization/reports/{id}":             NewReportResource,
 }

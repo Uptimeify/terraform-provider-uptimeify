@@ -458,8 +458,24 @@ func TestAccIMStack(t *testing.T) {
 				),
 			},
 			{ // in-place updates, incl. reordering: first -> 1, second -> 2
-				Config: upd.config(),
+				Config: upd.config() + `
+data "uptimeify_im_schedule" "by_id"      { id = uptimeify_im_schedule.s.id }
+data "uptimeify_im_schedule" "by_name"    { name = uptimeify_im_schedule.s.name }
+data "uptimeify_im_schedule" "in_team"    {
+  name    = uptimeify_im_schedule.s.name
+  team_id = uptimeify_im_team.t.id
+}
+`,
 				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_schedule.by_name", "id", sched, "id"),
+					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_schedule.in_team", "id", sched, "id"),
+					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_schedule.by_id", "tier_id", sched, "tier_id"),
+					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_schedule.by_id", "team_id", sched, "team_id"),
+					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_schedule.by_id", "team_name", "uptimeify_im_team.t", "name"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_im_schedule.by_id", "rotation_repeats", "weekly"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_im_schedule.by_id", "weekly_schedules.0.until", "24:00"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_im_schedule.by_id", "rotations.0.members.#", "1"),
+					tfresource.TestCheckResourceAttrSet("data.uptimeify_im_schedule.by_id", "created_at"),
 					accSameInt("uptimeify_im_team.t", "id", &teamID),
 					accSameInt(sched, "id", &scheduleID),
 					tfresource.TestCheckResourceAttr("uptimeify_im_team_member.m", "im_role", "member"),
