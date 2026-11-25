@@ -96,7 +96,8 @@ func TestNotificationChannelUpdateClearsRemovedKeys(t *testing.T) {
 }
 
 // Acceptance: customer, IP and domain on a customer the test creates itself. The domain uses a
-// .com name (offline fallback TLD list) and 192.0.2.0/24 (TEST-NET-1); POST checks neither live.
+// .com name (offline fallback TLD list) and a public address: since 11.11.2026 the API refuses
+// private, loopback and documentation ranges with 400 invalidIpAddress. POST checks neither live.
 func TestAccCustomerIPDomain(t *testing.T) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("TF_ACC not set")
@@ -105,7 +106,7 @@ func TestAccCustomerIPDomain(t *testing.T) {
 	n := time.Now().Unix() % 1_000_000
 	name := fmt.Sprintf("tfacc-cust-%d", n)
 	pkg := accPackageType(t)
-	ip := fmt.Sprintf("192.0.2.%d", n%250+1)
+	ip := fmt.Sprintf("8.8.4.%d", n%250+1)
 	domain := fmt.Sprintf("tfacc-%d.example.com", n)
 	var custID, ipID, domID string
 
