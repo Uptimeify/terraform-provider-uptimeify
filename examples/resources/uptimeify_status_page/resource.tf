@@ -35,6 +35,9 @@ resource "uptimeify_status_page" "staff" {
   visibility              = "sso_members_only"
   ip_allowlist            = ["203.0.113.0/24", "2001:db8::/32"]
   monitor_updates_enabled = false
+  # No incident or maintenance history on the page.
+  show_recent_incidents   = false
+  show_recent_maintenance = false
 }
 
 # Password-protected page; the password never lands in state.

@@ -28,6 +28,7 @@ data "uptimeify_im_statuspage_rule" "acme" {
 ### Read-Only
 
 - `auto_resolve` (Boolean)
+- `component_ids` (Set of Number) Components the incident affects; null = none.
 - `created_at` (String)
 - `message` (String)
 - `min_severity` (String)

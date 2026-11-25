@@ -48,7 +48,7 @@ resource "uptimeify_customer" "shop" {
 - `max_self_service_urls` (Number) Cap for self-service monitors. Unset = package default. Only an organization admin token with unrestricted customer scope sets and reads it (otherwise the API ignores it and leaves it out of the answer, so changes made outside Terraform are not detected).
 - `monthly_reports_enabled` (Boolean) Monthly report mails. Unset at create = package default; unset later = keep.
 - `notification_email` (String) Alert recipient address of this customer.
-- `notification_phone_number` (String) Alert SMS number of this customer.
+- `notification_phone_number` (String) Alert SMS number of this customer, in international format (`+491701234567`). A number outside the EU/EEA, Switzerland and the UK is rejected with 400 `smsCountryNotAllowed`.
 - `notification_targets` (Map of String) Who receives each channel type: keys `sms`, `email`, `webhook`, `integrations`; values `customer` or `organization`. Unset = organization default.
 - `package_id` (Number) Package configuration id of the organization. Set this or `package_type`. Changing the package needs organization write access.
 - `package_type` (String) Package key or display name, resolved to `package_id`. Set this or `package_id`. Kept as written while the package stays the same; otherwise (import, unset, package changed elsewhere) the API's package key.

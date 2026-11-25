@@ -29,8 +29,10 @@ output "organization_name" {
 - `billing_email` (String)
 - `city` (String)
 - `company_name` (String)
+- `contract_email` (String)
 - `country` (String)
 - `default_notification_channels` (Attributes) (see [below for nested schema](#nestedatt--default_notification_channels))
+- `default_notification_rules` (Map of Map of Boolean) Channels switched on per check type for new customers; null while never saved.
 - `default_notification_targets` (Attributes) (see [below for nested schema](#nestedatt--default_notification_targets))
 - `deletion_due_at` (String)
 - `email_language` (String)

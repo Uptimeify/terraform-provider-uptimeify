@@ -60,12 +60,118 @@
     "status",
     "timeoutSeconds"
   ],
+  "PATCH /api/im/channels/{id}": [
+    "config",
+    "isActive",
+    "name",
+    "teamId",
+    "type"
+  ],
+  "PATCH /api/im/org-settings": [
+    "fallbackChannelId",
+    "monitoringBridge",
+    "overageEnabled"
+  ],
+  "PATCH /api/im/outbound/{id}": [
+    "config",
+    "filters",
+    "isActive",
+    "name",
+    "teamId"
+  ],
+  "PATCH /api/im/routing/{id}": [
+    "escalationPolicyId",
+    "match",
+    "priority",
+    "severityOverride",
+    "teamId"
+  ],
+  "PATCH /api/im/schedules/{id}": [
+    "autoRotationSize",
+    "customRepeatUnit",
+    "customRepeatValue",
+    "effectiveFrom",
+    "effectiveUntil",
+    "name",
+    "rotationMode",
+    "rotationRepeats",
+    "rotations",
+    "roundRobinSize",
+    "startsOnDateOfMonth",
+    "startsOnDayOfWeek",
+    "startsOnTime",
+    "timezone",
+    "weeklySchedules"
+  ],
+  "PATCH /api/im/schedules/{id}/overrides/{overrideId}": [
+    "applyScope",
+    "coveredByUserIds",
+    "endsAt",
+    "escalationTierOrder",
+    "startsAt",
+    "type",
+    "userId"
+  ],
   "PATCH /api/im/services/{id}": [
     "criticality",
     "description",
     "monitors",
     "name",
     "ownerTeamId"
+  ],
+  "PATCH /api/im/sources/{id}": [
+    "authMode",
+    "autoResolve",
+    "groupingWindowMinutes",
+    "maintenance",
+    "name",
+    "payloadMapping",
+    "snoozeUntil",
+    "teamId"
+  ],
+  "PATCH /api/im/statuspage-rules/{id}": [
+    "autoResolve",
+    "componentIds",
+    "message",
+    "minSeverity",
+    "statusPageId",
+    "targetState",
+    "teamId"
+  ],
+  "PATCH /api/im/teams/{id}": [
+    "analyticsEnabled",
+    "engagementReportDayOfWeek",
+    "engagementReportEnabled",
+    "engagementReportTime",
+    "escalationRepeats",
+    "escalationRepeatsAfterMinutes",
+    "escalationRepeatsStopMode",
+    "labelColor",
+    "name",
+    "timezone"
+  ],
+  "PATCH /api/im/teams/{id}/members/{memberId}": [
+    "imRole"
+  ],
+  "PATCH /api/im/teams/{id}/overrides/{overrideId}": [
+    "applyScope",
+    "coveredByUserIds",
+    "endsAt",
+    "escalationTierOrder",
+    "scheduleId",
+    "startsAt",
+    "type",
+    "userId"
+  ],
+  "PATCH /api/im/teams/{id}/tiers/{tierId}": [
+    "autoEscalationAfterMinutes",
+    "autoEscalationEnabled",
+    "autoEscalationSeverities",
+    "autoEscalationStopMode",
+    "autoEscalationTimeFilters",
+    "repeats",
+    "repeatsAfterMinutes",
+    "repeatsStopMode"
   ],
   "PATCH /api/imap-pop-monitors/{id}": [
     "allowedCheckCountryCodes",
@@ -101,6 +207,34 @@
     "isActive",
     "name",
     "type"
+  ],
+  "PATCH /api/organization": [
+    "billingEmail",
+    "city",
+    "companyName",
+    "contractEmail",
+    "country",
+    "countryCode",
+    "defaultNotificationChannels",
+    "defaultNotificationRules",
+    "defaultNotificationTargets",
+    "name",
+    "postalCode",
+    "quotaAutoUpgradeEnabled",
+    "quotaChangeEffective",
+    "quotaExtraSmsPriceCents",
+    "quotaIpsLimit",
+    "quotaMonthlyPriceCents",
+    "quotaSmsIncluded",
+    "quotaWebsitesLimit",
+    "requireMfaAdmins",
+    "requireMfaCustomers",
+    "requireMfaEditors",
+    "requireMfaReadonly",
+    "smsOverageSafetyCapCentsMonthly",
+    "smsOverageSafetyCapMaxCentsMonthly",
+    "street",
+    "vatId"
   ],
   "PATCH /api/organization/reports/{id}": [
     "dayOfMonth",
@@ -340,12 +474,122 @@
     "status",
     "timeoutSeconds"
   ],
+  "POST /api/im/channels": [
+    "config",
+    "isActive",
+    "name",
+    "teamId",
+    "type"
+  ],
+  "POST /api/im/outbound": [
+    "config",
+    "filters",
+    "isActive",
+    "name",
+    "teamId",
+    "type"
+  ],
+  "POST /api/im/routing": [
+    "escalationPolicyId",
+    "match",
+    "priority",
+    "severityOverride",
+    "teamId"
+  ],
+  "POST /api/im/schedules/{id}/overrides": [
+    "applyScope",
+    "coveredByUserIds",
+    "endsAt",
+    "escalationTierOrder",
+    "startsAt",
+    "type",
+    "userId"
+  ],
   "POST /api/im/services": [
     "criticality",
     "description",
     "monitors",
     "name",
     "ownerTeamId"
+  ],
+  "POST /api/im/sources": [
+    "authMode",
+    "autoResolve",
+    "groupingWindowMinutes",
+    "maintenance",
+    "name",
+    "payloadMapping",
+    "teamId",
+    "type"
+  ],
+  "POST /api/im/statuspage-rules": [
+    "autoResolve",
+    "componentIds",
+    "message",
+    "minSeverity",
+    "statusPageId",
+    "targetState",
+    "teamId"
+  ],
+  "POST /api/im/teams": [
+    "analyticsEnabled",
+    "engagementReportDayOfWeek",
+    "engagementReportEnabled",
+    "engagementReportTime",
+    "escalationRepeats",
+    "escalationRepeatsAfterMinutes",
+    "escalationRepeatsStopMode",
+    "labelColor",
+    "name",
+    "organizationId",
+    "timezone"
+  ],
+  "POST /api/im/teams/{id}/invite": [
+    "email",
+    "imRole"
+  ],
+  "POST /api/im/teams/{id}/members": [
+    "imRole",
+    "userId"
+  ],
+  "POST /api/im/teams/{id}/overrides": [
+    "applyScope",
+    "coveredByUserIds",
+    "endsAt",
+    "escalationTierOrder",
+    "scheduleId",
+    "startsAt",
+    "type",
+    "userId"
+  ],
+  "POST /api/im/teams/{id}/tiers": [
+    "autoEscalationAfterMinutes",
+    "autoEscalationEnabled",
+    "autoEscalationSeverities",
+    "autoEscalationStopMode",
+    "autoEscalationTimeFilters",
+    "memberUserIds",
+    "repeats",
+    "repeatsAfterMinutes",
+    "repeatsStopMode",
+    "tierOrder"
+  ],
+  "POST /api/im/tiers/{tierId}/schedules": [
+    "autoRotationSize",
+    "customRepeatUnit",
+    "customRepeatValue",
+    "effectiveFrom",
+    "effectiveUntil",
+    "name",
+    "rotationMode",
+    "rotationRepeats",
+    "rotations",
+    "roundRobinSize",
+    "startsOnDateOfMonth",
+    "startsOnDayOfWeek",
+    "startsOnTime",
+    "timezone",
+    "weeklySchedules"
   ],
   "POST /api/imap-pop-monitors": [
     "allowDuplicate",

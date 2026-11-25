@@ -36,7 +36,7 @@ data "uptimeify_notification_channel" "by_id" {
 - `allowed_package_types` (Set of String)
 - `category` (String) `direct` (default) or `integration`.
 - `conditions` (String) Delivery conditions as a JSON object. Unset = always.
-- `config` (String) Provider settings without secrets, as a JSON object (`jsonencode({ email = "ops@example.com" })`). Keys removed here are cleared.
+- `config` (String) Provider settings without secrets, as a JSON object (`jsonencode({ email = "ops@example.com" })`). Keys removed here are cleared. `type = "sms"`: numbers in E.164 form (`+491701234567`). A number outside the EU/EEA, Switzerland and the UK is rejected with 400 `smsCountryNotAllowed`.
 - `created_at` (String)
 - `delay_seconds` (Number) Wait before sending, 0 to 86400 seconds.
 - `is_active` (Boolean)

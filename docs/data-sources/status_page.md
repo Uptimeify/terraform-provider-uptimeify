@@ -48,6 +48,8 @@ data "uptimeify_status_page" "by_id" {
 - `organization_id` (Number)
 - `public_id` (String)
 - `push_subscriptions_enabled` (Boolean)
+- `show_recent_incidents` (Boolean)
+- `show_recent_maintenance` (Boolean)
 - `sms_subscriptions_enabled` (Boolean)
 - `subscription_delay_minutes` (Number)
 - `subscriptions_enabled` (Boolean)

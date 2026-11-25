@@ -9,3 +9,10 @@ resource "uptimeify_im_statuspage_rule" "acme" {
   auto_resolve   = true
   message        = "We are investigating an outage and will post updates here."
 }
+
+# sev2 and worse only mark the shop component of the page as degraded.
+resource "uptimeify_im_statuspage_rule" "acme_shop" {
+  team_id        = tonumber(uptimeify_im_team.oncall.id)
+  status_page_id = tonumber(uptimeify_status_page.acme.id)
+  component_ids  = [tonumber(uptimeify_status_page_component.shop.id)]
+}

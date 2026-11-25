@@ -48,6 +48,8 @@ type StatusPage struct {
 	Visibility               string          `json:"visibility"`
 	ManagementType           string          `json:"managementType"`
 	IsPublished              bool            `json:"isPublished"`
+	ShowRecentIncidents      bool            `json:"showRecentIncidents"`
+	ShowRecentMaintenance    bool            `json:"showRecentMaintenance"`
 	SubscriptionsEnabled     bool            `json:"subscriptionsEnabled"`
 	SubscriptionDelayMinutes int64           `json:"subscriptionDelayMinutes"`
 	IncludeCustomerMonitors  bool            `json:"includeCustomerMonitors"`
@@ -210,6 +212,7 @@ type ImStatuspageRule struct {
 	MinSeverity    string  `json:"minSeverity"`
 	TargetState    string  `json:"targetState"`
 	AutoResolve    bool    `json:"autoResolve"`
+	ComponentIDs   []int64 `json:"componentIds"` // null = none
 	Message        *string `json:"message"`
 	CreatedAt      string  `json:"createdAt"`
 	UpdatedAt      string  `json:"updatedAt"`

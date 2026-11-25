@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -32,6 +33,8 @@ var (
 	orgChannelsAttrTypes = map[string]attr.Type{"email": types.BoolType, "sms": types.BoolType, "webhook": types.BoolType, "integrations": types.BoolType}
 	orgTargetsAttrTypes  = map[string]attr.Type{"email": types.StringType, "sms": types.StringType, "webhook": types.StringType, "integrations": types.StringType}
 	orgTargetAudiences   = []string{"customer", "organization", "both"}
+	// default_notification_rules: check type -> channel -> on/off.
+	orgRulesElemType = types.MapType{ElemType: types.BoolType}
 )
 
 type orgSettingsResource struct{ client *client.Client }
@@ -46,6 +49,7 @@ type orgSettingsModel struct {
 	Country                         types.String `tfsdk:"country"`
 	VatID                           types.String `tfsdk:"vat_id"`
 	BillingEmail                    types.String `tfsdk:"billing_email"`
+	ContractEmail                   types.String `tfsdk:"contract_email"`
 	RequireMfaAdmins                types.Bool   `tfsdk:"require_mfa_admins"`
 	RequireMfaEditors               types.Bool   `tfsdk:"require_mfa_editors"`
 	RequireMfaReadonly              types.Bool   `tfsdk:"require_mfa_readonly"`
@@ -53,6 +57,7 @@ type orgSettingsModel struct {
 	SmsOverageSafetyCapCentsMonthly types.Int64  `tfsdk:"sms_overage_safety_cap_cents_monthly"`
 	DefaultNotificationChannels     types.Object `tfsdk:"default_notification_channels"`
 	DefaultNotificationTargets      types.Object `tfsdk:"default_notification_targets"`
+	DefaultNotificationRules        types.Map    `tfsdk:"default_notification_rules"`
 }
 
 func (m *orgSettingsModel) fromAPI(ctx context.Context, o *client.Organization) diag.Diagnostics {
@@ -66,6 +71,7 @@ func (m *orgSettingsModel) fromAPI(ctx context.Context, o *client.Organization) 
 	m.Country = types.StringPointerValue(o.Country)
 	m.VatID = types.StringPointerValue(o.VatID)
 	m.BillingEmail = types.StringPointerValue(o.BillingEmail)
+	m.ContractEmail = types.StringPointerValue(o.ContractEmail)
 	m.RequireMfaAdmins = types.BoolPointerValue(o.RequireMfaAdmins)
 	m.RequireMfaEditors = types.BoolPointerValue(o.RequireMfaEditors)
 	m.RequireMfaReadonly = types.BoolPointerValue(o.RequireMfaReadonly)
@@ -75,6 +81,8 @@ func (m *orgSettingsModel) fromAPI(ctx context.Context, o *client.Organization) 
 	m.DefaultNotificationChannels, d = types.ObjectValueFrom(ctx, orgChannelsAttrTypes, o.DefaultNotificationChannels)
 	diags.Append(d...)
 	m.DefaultNotificationTargets, d = types.ObjectValueFrom(ctx, orgTargetsAttrTypes, o.DefaultNotificationTargets)
+	diags.Append(d...)
+	m.DefaultNotificationRules, d = types.MapValueFrom(ctx, orgRulesElemType, o.DefaultNotificationRules)
 	diags.Append(d...)
 	return diags
 }
@@ -108,14 +116,17 @@ func (r *orgSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "The organization id.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
-			"name":                  str("Organization name.", stringvalidator.LengthBetween(1, 255)),
-			"company_name":          str("Company name on invoices."),
-			"street":                str("Billing address."),
-			"postal_code":           str("Billing address."),
-			"city":                  str("Billing address."),
-			"country":               str("Billing country (free text; the server derives the ISO code). Changing it resets the VAT check."),
-			"vat_id":                str("VAT ID. Changing it resets the VIES verdict until it is validated again."),
-			"billing_email":         str("Address for invoices (admins only)."),
+			"name":          str("Organization name.", stringvalidator.LengthBetween(1, 255)),
+			"company_name":  str("Company name on invoices."),
+			"street":        str("Billing address."),
+			"postal_code":   str("Billing address."),
+			"city":          str("Billing address."),
+			"country":       str("Billing country (free text; the server derives the ISO code). Changing it resets the VAT check."),
+			"vat_id":        str("VAT ID. Changing it resets the VIES verdict until it is validated again."),
+			"billing_email": str("Address for invoices (admins only)."),
+			"contract_email": str("Address that receives notices of changes to the terms, the DPA and the privacy policy "+
+				"(admins only). While none is stored every admin receives them; going back to that (null) is not possible here.",
+				stringvalidator.LengthAtMost(320)),
 			"require_mfa_admins":    mfa("admins"),
 			"require_mfa_editors":   mfa("team editors"),
 			"require_mfa_readonly":  mfa("team readonly members"),
@@ -141,6 +152,11 @@ func (r *orgSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest
 					"webhook":      schema.StringAttribute{Required: true, Validators: []validator.String{stringvalidator.OneOf("organization")}},
 					"integrations": target(),
 				}},
+			"default_notification_rules": schema.MapAttribute{Optional: true, Computed: true, ElementType: orgRulesElemType,
+				PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()},
+				Description: "Channels switched on per check type for new customers: check type (e.g. `http_status`, `ssl_expiry`) " +
+					"to channel (`email`, `sms`, `webhook`, `integrations`) to on/off. Stored as written and sent whole when it " +
+					"differs, so list every check type you want a rule for. Unset = keep."},
 		},
 	}
 }
@@ -205,6 +221,12 @@ func (r *orgSettingsResource) apply(ctx context.Context, plan *orgSettingsModel)
 	}
 	diags.Append(setObj(ctx, patch, "defaultNotificationChannels", plan.DefaultNotificationChannels, stored.DefaultNotificationChannels, &client.NotificationChannels{})...)
 	diags.Append(setObj(ctx, patch, "defaultNotificationTargets", plan.DefaultNotificationTargets, stored.DefaultNotificationTargets, &client.NotificationTargets{})...)
+	setStr(patch, "contractEmail", plan.ContractEmail, cur.ContractEmail)
+	if v := plan.DefaultNotificationRules; !v.IsNull() && !v.IsUnknown() && !v.Equal(stored.DefaultNotificationRules) {
+		rules := map[string]map[string]bool{}
+		diags.Append(v.ElementsAs(ctx, &rules, false)...)
+		patch["defaultNotificationRules"] = rules
+	}
 	if diags.HasError() {
 		return diags
 	}
