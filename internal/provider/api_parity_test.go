@@ -162,7 +162,7 @@ var parityIgnored = map[string]string{
 	"PATCH /api/icmp-monitors/{id} port": "ICMP has no port; the shared PATCH schema accepts it",
 	"PATCH /api/organization/whitelabel/branding themeNeutral": "deprecated alias of themeSecondary (until 2027-02-01)",
 	"* managementType":                            "not mapped yet: managed vs self-service website (customer self-service)",
-	"POST /api/websites allowPaidQuotaUpgrade":    "one-time consent for a paid quota upgrade, not state",
+	"* allowPaidQuotaUpgrade":                     "one-time consent for a paid quota upgrade (agent sessions; ignored for API tokens), not state",
 	"POST /api/websites customFields":             "not mapped yet: website custom field values",
 	"POST /api/websites dnsConfig":                "not mapped yet: DNS sub-check of the website create",
 	"POST /api/websites mtlsEnabled":              "not mapped yet: mTLS client certificate",
