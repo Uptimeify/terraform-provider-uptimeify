@@ -14,6 +14,9 @@ resource "uptimeify_im_alert_source" "grafana" {
   hmac_secret_wo_version = 1
 
   maintenance_windows = [{ days_of_week = [7], from = "02:00", to = "04:00", timezone = "Europe/Berlin" }]
+
+  # One-off mute, e.g. during a migration; remove the line to end it early.
+  snooze_until = "2026-12-01T06:00:00+01:00"
 }
 
 # Custom webhook with a v2 attribute mapping and bearer auth.

@@ -46,6 +46,7 @@ type imAlertSourceModel struct {
 	AutoResolve           types.Bool                 `tfsdk:"auto_resolve"`
 	GroupingWindowMinutes types.Int64                `tfsdk:"grouping_window_minutes"`
 	MaintenanceWindows    []imMaintenanceWindowModel `tfsdk:"maintenance_windows"`
+	SnoozeUntil           types.String               `tfsdk:"snooze_until"`
 	URLTokenEnabled       types.Bool                 `tfsdk:"url_token_enabled"`
 	HMACEnabled           types.Bool                 `tfsdk:"hmac_enabled"`
 	BearerEnabled         types.Bool                 `tfsdk:"bearer_enabled"`
@@ -88,6 +89,7 @@ func (m *imAlertSourceModel) fromAPI(ctx context.Context, s *client.AlertSource,
 	m.AutoResolve = types.BoolValue(s.AutoResolve)
 	m.GroupingWindowMinutes = types.Int64PointerValue(s.GroupingWindowMinutes)
 	m.MaintenanceWindows = maintenanceFromAPI(s.Maintenance)
+	m.SnoozeUntil = keepSameInstantPtr(m.SnoozeUntil, s.SnoozeUntil)
 	m.URLTokenEnabled = types.BoolPointerValue(s.AuthMode.URLToken)
 	m.HMACEnabled = types.BoolValue(s.AuthMode.HMAC != nil && s.AuthMode.HMAC.Enabled)
 	m.BearerEnabled = types.BoolValue(s.AuthMode.Bearer != nil && s.AuthMode.Bearer.Enabled)
@@ -158,6 +160,11 @@ func (r *imAlertSourceResource) Schema(_ context.Context, _ resource.SchemaReque
 						Description: "IANA zone. Unset = the organization zone."},
 				}},
 			},
+			"snooze_until": schema.StringAttribute{Optional: true,
+				Description: "Suppress alerts of this source until this time. RFC3339 timestamp; unset = not snoozed (removing " +
+					"it ends the snooze). The API keeps a past time as it is, so an expired value shows no diff. The API answers " +
+					"in UTC with milliseconds, another spelling of the same instant is kept as written.",
+				Validators: []validator.String{rfc3339Validator{}}},
 			"url_token_enabled": schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: keepB,
 				Description: "`authMode.urlToken`. The server stores the flag; unset = not sent."},
 			"hmac_enabled": schema.BoolAttribute{Optional: true, Computed: true, PlanModifiers: keepB,
@@ -294,6 +301,13 @@ func (r *imAlertSourceResource) Create(ctx context.Context, req resource.CreateR
 	}
 	id := strconv.FormatInt(src.ID, 10)
 	got := plan
+	// The create endpoint does not take snoozeUntil; it goes in a PATCH right after. A failure
+	// leaves the source in state (tainted) like the secret endpoints below.
+	if !plan.SnoozeUntil.IsNull() {
+		if _, err := r.client.UpdateAlertSource(ctx, id, map[string]any{"snoozeUntil": plan.SnoozeUntil.ValueString()}); err != nil {
+			resp.Diagnostics.AddError("Snoozing alert source failed", err.Error())
+		}
+	}
 	got.IngestToken = types.StringPointerValue(src.IngestToken)
 	got.InboundEmailAddress = types.StringPointerValue(src.InboundEmailAddress)
 	got.IngestURL = r.ingestURL(src.Type, src.IngestToken)
@@ -432,6 +446,9 @@ func (r *imAlertSourceResource) Update(ctx context.Context, req resource.UpdateR
 	}
 	if !reflect.DeepEqual(plan.MaintenanceWindows, state.MaintenanceWindows) {
 		patch["maintenance"] = maintenanceToAPI(plan.MaintenanceWindows) // nil = null clears
+	}
+	if !plan.SnoozeUntil.Equal(state.SnoozeUntil) {
+		patch["snoozeUntil"] = plan.SnoozeUntil.ValueStringPointer() // nil = null ends the snooze
 	}
 	var cur *client.AlertSource
 	var err error

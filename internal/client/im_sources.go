@@ -96,6 +96,7 @@ type AlertSource struct {
 	AutoResolve           bool               `json:"autoResolve"`
 	GroupingWindowMinutes *int64             `json:"groupingWindowMinutes"`
 	Maintenance           *SourceMaintenance `json:"maintenance"`
+	SnoozeUntil           *string            `json:"snoozeUntil"`
 	CreatedAt             string             `json:"createdAt"`
 	UpdatedAt             string             `json:"updatedAt"`
 	// Create answer only.

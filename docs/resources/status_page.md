@@ -50,6 +50,9 @@ resource "uptimeify_status_page" "staff" {
   visibility              = "sso_members_only"
   ip_allowlist            = ["203.0.113.0/24", "2001:db8::/32"]
   monitor_updates_enabled = false
+  # No incident or maintenance history on the page.
+  show_recent_incidents   = false
+  show_recent_maintenance = false
 }
 
 # Password-protected page; the password never lands in state.
@@ -91,6 +94,8 @@ variable "status_page_password" {
 - `management_type` (String) Ownership class like monitors: `managed` (the organization operates the page) or `self_service` (the customer operates it). Unset = the server default at creation (`managed`; a customer-bound token always creates `self_service`), then kept as is. Only organization-wide admin tokens may choose or change it (`managementTypeOrgOnly` otherwise).
 - `monitor_updates_enabled` (Boolean) Monitors write to the page: their state drives components and the page status, their incidents show in the history and reach subscribers. `false` = the page only shows what is reported manually; a monitoring incident reaches it only when explicitly linked. Default `true`.
 - `push_subscriptions_enabled` (Boolean) Visitors may subscribe to browser push notifications. Default `false`; needs push keys on the platform.
+- `show_recent_incidents` (Boolean) Show the incident history on the page. Unset = the server default at creation (`true`), then kept as is. Writing it also sets `show_incidents` of the page design, which is what the page renders. With a `uptimeify_status_page_design` for the same page set the switch there instead (or the same value in both): a later design change does not write back here.
+- `show_recent_maintenance` (Boolean) Show the maintenance history on the page. Unset = the server default at creation (`true`), then kept as is. Writing it also sets `show_maintenance` of the page design, which is what the page renders. With a `uptimeify_status_page_design` for the same page set the switch there instead (or the same value in both): a later design change does not write back here.
 - `slug` (String) URL slug, lowercase letters, digits and single hyphens, 2 to 120 characters. Unset = derived from `name` once at creation (with a numeric suffix on collision). A set slug that is taken fails the create.
 - `sms_subscriptions_enabled` (Boolean) Visitors may subscribe by SMS. Default `false`. Each SMS draws on the organization's SMS quota. Turning it on without SMS quota (no included SMS left and no overage) fails the apply with 403 `smsQuotaRequired`; a page that already has it on keeps it.
 - `subscription_delay_minutes` (Number) Flap window before subscribers are mailed, 1 to 120 minutes. Default `5`.

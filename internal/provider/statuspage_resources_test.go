@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -850,17 +851,7 @@ func TestStatusPageCreateMonitorUpdatesOff(t *testing.T) {
 	r := &statusPageResource{client: client.New(srv.URL, "wsm_test", "test")}
 	var sch resource.SchemaResponse
 	r.Schema(ctx, resource.SchemaRequest{}, &sch)
-	m := statusPageResourceModel{statusPageModel: statusPageModel{ID: types.StringUnknown(), PublicID: types.StringUnknown(),
-		OrganizationID: types.Int64Unknown(), CustomerID: types.Int64Null(), CustomerName: types.StringUnknown(),
-		Name: types.StringValue("P"), Slug: types.StringUnknown(), Description: types.StringNull(),
-		Visibility: types.StringValue("public"), ManagementType: types.StringUnknown(), IsPublished: types.BoolValue(true),
-		SubscriptionsEnabled: types.BoolValue(true), SubscriptionDelayMinutes: types.Int64Value(5),
-		IncludeCustomerMonitors: types.BoolUnknown(), MonitorUpdatesEnabled: types.BoolValue(false),
-		HiddenMonitors:          types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil),
-		SMSSubscriptionsEnabled: types.BoolValue(false), PushSubscriptionsEnabled: types.BoolValue(false),
-		IPAllowlist: types.SetValueMust(types.StringType, nil), HasPassword: types.BoolUnknown(),
-		AccessPasswordSetAt: types.StringUnknown(), CreatedAt: types.StringUnknown(), UpdatedAt: types.StringUnknown()},
-		AccessPasswordWO: types.StringNull(), AccessPasswordWOVersion: types.Int64Null()}
+	m := statusPageCreatePlan()
 	plan := tfsdk.Plan{Schema: sch.Schema}
 	if d := plan.Set(ctx, &m); d.HasError() {
 		t.Fatal(d)
@@ -878,5 +869,90 @@ func TestStatusPageCreateMonitorUpdatesOff(t *testing.T) {
 	resp.State.Get(ctx, &got)
 	if got.MonitorUpdatesEnabled.ValueBool() {
 		t.Fatal("monitor_updates_enabled not read back as false")
+	}
+}
+
+// statusPageCreatePlan is the planned model of a minimal `uptimeify_status_page` (name only).
+func statusPageCreatePlan() statusPageResourceModel {
+	return statusPageResourceModel{statusPageModel: statusPageModel{ID: types.StringUnknown(), PublicID: types.StringUnknown(),
+		OrganizationID: types.Int64Unknown(), CustomerID: types.Int64Null(), CustomerName: types.StringUnknown(),
+		Name: types.StringValue("P"), Slug: types.StringUnknown(), Description: types.StringNull(),
+		Visibility: types.StringValue("public"), ManagementType: types.StringUnknown(), IsPublished: types.BoolValue(true),
+		SubscriptionsEnabled: types.BoolValue(true), SubscriptionDelayMinutes: types.Int64Value(5),
+		IncludeCustomerMonitors: types.BoolUnknown(), MonitorUpdatesEnabled: types.BoolValue(false),
+		ShowRecentIncidents: types.BoolUnknown(), ShowRecentMaintenance: types.BoolUnknown(),
+		HiddenMonitors:          types.SetValueMust(types.ObjectType{AttrTypes: monitorRefAttrTypes}, nil),
+		SMSSubscriptionsEnabled: types.BoolValue(false), PushSubscriptionsEnabled: types.BoolValue(false),
+		IPAllowlist: types.SetValueMust(types.StringType, nil), HasPassword: types.BoolUnknown(),
+		AccessPasswordSetAt: types.StringUnknown(), CreatedAt: types.StringUnknown(), UpdatedAt: types.StringUnknown()},
+		AccessPasswordWO: types.StringNull(), AccessPasswordWOVersion: types.Int64Null()}
+}
+
+// Unit: a configured history switch goes in the create body and is read back; an unset one is
+// left to the server default, and an update sends only the switch that changed.
+func TestStatusPageShowRecent(t *testing.T) {
+	var calls []string
+	page := map[string]any{"id": 5, "publicId": "u", "organizationId": 2, "customerId": nil, "name": "P", "slug": "p",
+		"visibility": "public", "managementType": "managed", "isPublished": true, "showRecentIncidents": true,
+		"showRecentMaintenance": true, "subscriptionsEnabled": true, "subscriptionDelayMinutes": 5,
+		"includeCustomerMonitors": false, "monitorUpdatesEnabled": true, "hiddenMonitors": []any{}, "ipAllowlist": []any{},
+		"hasPassword": false, "createdAt": "c", "updatedAt": "u"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		for _, k := range []string{"showRecentIncidents", "showRecentMaintenance"} {
+			if v, ok := body[k]; ok {
+				page[k] = v
+				calls = append(calls, fmt.Sprintf("%s %s=%v", r.Method, k, v))
+			}
+		}
+		if r.Method == http.MethodGet {
+			_ = json.NewEncoder(w).Encode(page)
+			return
+		}
+		_, _ = w.Write([]byte(`{"statusPage":{"id":5,"slug":"p"}}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &statusPageResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	m := statusPageCreatePlan()
+	m.MonitorUpdatesEnabled = types.BoolValue(true)
+	m.ShowRecentIncidents = types.BoolValue(false)
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	if d := plan.Set(ctx, &m); d.HasError() {
+		t.Fatal(d)
+	}
+	created := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan, Config: tfsdk.Config{Schema: sch.Schema, Raw: plan.Raw}}, &created)
+	if created.Diagnostics.HasError() {
+		t.Fatal(created.Diagnostics)
+	}
+	var got statusPageResourceModel
+	created.State.Get(ctx, &got)
+	if len(calls) != 1 || calls[0] != "POST showRecentIncidents=false" || got.ShowRecentIncidents.ValueBool() || !got.ShowRecentMaintenance.ValueBool() {
+		t.Fatalf("create: calls %q, state %v/%v", calls, got.ShowRecentIncidents, got.ShowRecentMaintenance)
+	}
+
+	// Second plan: the state as planned sends nothing; switching maintenance off sends only that.
+	calls = nil
+	for i, want := range []string{"", "PATCH showRecentMaintenance=false"} {
+		next := got
+		if i == 1 {
+			next.ShowRecentMaintenance = types.BoolValue(false)
+		}
+		if d := plan.Set(ctx, &next); d.HasError() {
+			t.Fatal(d)
+		}
+		updated := resource.UpdateResponse{State: tfsdk.State{Schema: sch.Schema}}
+		r.Update(ctx, resource.UpdateRequest{Plan: plan, State: created.State, Config: tfsdk.Config{Schema: sch.Schema, Raw: plan.Raw}}, &updated)
+		if updated.Diagnostics.HasError() {
+			t.Fatal(updated.Diagnostics)
+		}
+		if strings.Join(calls, ";") != want {
+			t.Fatalf("update %d: calls %q, want %q", i, calls, want)
+		}
 	}
 }

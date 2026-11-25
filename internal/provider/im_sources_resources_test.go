@@ -1,9 +1,11 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	tfresource "github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
@@ -586,4 +591,85 @@ func withoutDataSources(cfg string) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// Unit: snooze_until keeps the configured spelling while the API answers the same instant, and
+// the create endpoint does not take it, so it goes in a PATCH right after.
+func TestImAlertSourceSnoozeUntil(t *testing.T) {
+	ctx := context.Background()
+	api := "2026-12-01T05:00:00.000Z"
+	m := imAlertSourceModel{SnoozeUntil: types.StringValue("2026-12-01T06:00:00+01:00")}
+	m.fromAPI(ctx, &client.AlertSource{SnoozeUntil: &api}, false)
+	if got := m.SnoozeUntil.ValueString(); got != "2026-12-01T06:00:00+01:00" {
+		t.Fatalf("same instant not kept: %q", got)
+	}
+	var imported imAlertSourceModel
+	imported.fromAPI(ctx, &client.AlertSource{SnoozeUntil: &api}, true)
+	if imported.SnoozeUntil.ValueString() != api {
+		t.Fatalf("import: %v", imported.SnoozeUntil)
+	}
+	m.fromAPI(ctx, &client.AlertSource{}, false)
+	if !m.SnoozeUntil.IsNull() {
+		t.Fatalf("ended snooze not null: %v", m.SnoozeUntil)
+	}
+
+	var patches []string
+	fake := fakeIMSources(t)
+	defer fake.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		if r.Method == http.MethodPatch {
+			patches = append(patches, string(raw))
+		}
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		fake.Config.Handler.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+
+	r := &imAlertSourceResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	in := imAlertSourceResourceModel{imAlertSourceModel: imAlertSourceModel{ID: types.StringUnknown(), OrganizationID: types.Int64Unknown(),
+		TeamID: types.Int64Value(1), Name: types.StringValue("z"), Type: types.StringValue("zabbix"),
+		PayloadMapping: types.ObjectNull(payloadMappingAttrTypes()), AutoResolve: types.BoolValue(true),
+		SnoozeUntil: types.StringValue("2026-12-01T06:00:00+01:00"), URLTokenEnabled: types.BoolUnknown(),
+		HMACEnabled: types.BoolUnknown(), BearerEnabled: types.BoolUnknown(), SecondaryExpiresAt: types.StringUnknown(),
+		CreatedAt: types.StringUnknown(), UpdatedAt: types.StringUnknown()},
+		IngestToken: types.StringUnknown(), IngestURL: types.StringUnknown(), InboundEmailAddress: types.StringUnknown(),
+		BearerToken: types.StringUnknown()}
+	if d := plan.Set(ctx, &in); d.HasError() {
+		t.Fatal(d)
+	}
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan, Config: tfsdk.Config{Schema: sch.Schema, Raw: plan.Raw}}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	var got imAlertSourceResourceModel
+	resp.State.Get(ctx, &got)
+	if len(patches) != 1 || patches[0] != `{"snoozeUntil":"2026-12-01T06:00:00+01:00"}` ||
+		got.SnoozeUntil.ValueString() != "2026-12-01T06:00:00+01:00" {
+		t.Fatalf("patches %q, state %v", patches, got.SnoozeUntil)
+	}
+
+	// Removing the attribute ends the snooze with an explicit null; an unchanged plan sends nothing.
+	for i, want := range []string{"", `{"snoozeUntil":null}`} {
+		next := got
+		if i == 1 {
+			next.SnoozeUntil = types.StringNull()
+		}
+		if d := plan.Set(ctx, &next); d.HasError() {
+			t.Fatal(d)
+		}
+		patches = nil
+		upd := resource.UpdateResponse{State: tfsdk.State{Schema: sch.Schema}}
+		r.Update(ctx, resource.UpdateRequest{Plan: plan, State: resp.State, Config: tfsdk.Config{Schema: sch.Schema, Raw: plan.Raw}}, &upd)
+		if upd.Diagnostics.HasError() {
+			t.Fatal(upd.Diagnostics)
+		}
+		if strings.Join(patches, ";") != want {
+			t.Fatalf("update %d: patches %q, want %q", i, patches, want)
+		}
+	}
 }

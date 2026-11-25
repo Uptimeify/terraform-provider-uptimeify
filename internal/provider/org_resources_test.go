@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -592,5 +594,57 @@ func TestReportIncludeStatusPages(t *testing.T) {
 	}
 	if d := m.fromAPI(ctx, &client.Report{IncludeStatusPages: true}); d.HasError() || !m.IncludeStatusPages.ValueBool() {
 		t.Fatalf("fromAPI %v %v", m.IncludeStatusPages, d)
+	}
+}
+
+// Unit: contract_email and default_notification_rules are sent only when configured and
+// different from the stored value, read back, and a second apply sends nothing.
+func TestOrgSettingsContractEmailAndRules(t *testing.T) {
+	org := map[string]any{"id": 2, "publicId": "p", "name": "Org", "status": "active", "contractEmail": nil,
+		"defaultNotificationChannels": nil, "defaultNotificationTargets": nil, "defaultNotificationRules": nil}
+	var patches []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			raw, _ := io.ReadAll(r.Body)
+			patches = append(patches, string(raw))
+			var body map[string]any
+			_ = json.Unmarshal(raw, &body)
+			for k, v := range body {
+				org[k] = v
+			}
+		}
+		_ = json.NewEncoder(w).Encode(org)
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+	r := &orgSettingsResource{client: client.New(srv.URL, "wsm_test", "test")}
+
+	rules, d := types.MapValueFrom(ctx, orgRulesElemType, map[string]map[string]bool{"http_status": {"email": true, "sms": false}})
+	if d.HasError() {
+		t.Fatal(d)
+	}
+	plan := func() *orgSettingsModel { // unset attributes are unknown in a real plan, null works the same here
+		return &orgSettingsModel{ContractEmail: types.StringValue("legal@example.com"), DefaultNotificationRules: rules}
+	}
+	m := plan()
+	if d := r.apply(ctx, m); d.HasError() {
+		t.Fatal(d)
+	}
+	want := `{"contractEmail":"legal@example.com","defaultNotificationRules":{"http_status":{"email":true,"sms":false}}}`
+	if len(patches) != 1 || patches[0] != want {
+		t.Fatalf("patches %q", patches)
+	}
+	if m.ContractEmail.ValueString() != "legal@example.com" || !m.DefaultNotificationRules.Equal(rules) {
+		t.Fatalf("state %v %v", m.ContractEmail, m.DefaultNotificationRules)
+	}
+	if d := r.apply(ctx, plan()); d.HasError() || len(patches) != 1 {
+		t.Fatalf("second apply: %v, patches %q", d, patches)
+	}
+
+	// Never saved rules (null) and a non-admin answer (no contractEmail) read as null, not as an error.
+	var unset orgSettingsModel
+	if d := unset.fromAPI(ctx, &client.Organization{ID: 2, Name: "Org"}); d.HasError() ||
+		!unset.ContractEmail.IsNull() || !unset.DefaultNotificationRules.IsNull() {
+		t.Fatalf("null read: %v %v %v", d, unset.ContractEmail, unset.DefaultNotificationRules)
 	}
 }

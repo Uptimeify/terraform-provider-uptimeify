@@ -46,7 +46,7 @@ func (d *organizationDataSource) Metadata(_ context.Context, req datasource.Meta
 func (d *organizationDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	attrs := computedAttrs(map[string]string{
 		"id": "i", "public_id": "s", "name": "s", "status": "s", "deletion_due_at": "s", "email_language": "s",
-		"billing_email": "s", "billing_cycle": "s", "payment_method": "s",
+		"billing_email": "s", "contract_email": "s", "billing_cycle": "s", "payment_method": "s",
 		"require_mfa_admins": "b", "require_mfa_editors": "b", "require_mfa_readonly": "b", "require_mfa_customers": "b",
 		"company_name": "s", "street": "s", "postal_code": "s", "city": "s", "country": "s", "vat_id": "s",
 		"quota_websites_limit": "i", "quota_ips_limit": "i", "quota_sms_included": "i", "quota_monthly_price_cents": "i",
@@ -56,6 +56,8 @@ func (d *organizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 		Attributes: computedAttrs(map[string]string{"email": "b", "sms": "b", "webhook": "b", "integrations": "b"})}
 	attrs["default_notification_targets"] = schema.SingleNestedAttribute{Computed: true,
 		Attributes: computedAttrs(map[string]string{"email": "s", "sms": "s", "webhook": "s", "integrations": "s"})}
+	attrs["default_notification_rules"] = schema.MapAttribute{Computed: true, ElementType: orgRulesElemType,
+		Description: "Channels switched on per check type for new customers; null while never saved."}
 	resp.Schema = schema.Schema{
 		Description: "The token's own organization (`GET /api/organization`). Billing, address, quota and MFA fields are " +
 			"only filled for admin tokens.",

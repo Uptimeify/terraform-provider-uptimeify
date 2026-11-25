@@ -48,6 +48,8 @@ type StatusPage struct {
 	Visibility               string          `json:"visibility"`
 	ManagementType           string          `json:"managementType"`
 	IsPublished              bool            `json:"isPublished"`
+	ShowRecentIncidents      bool            `json:"showRecentIncidents"`
+	ShowRecentMaintenance    bool            `json:"showRecentMaintenance"`
 	SubscriptionsEnabled     bool            `json:"subscriptionsEnabled"`
 	SubscriptionDelayMinutes int64           `json:"subscriptionDelayMinutes"`
 	IncludeCustomerMonitors  bool            `json:"includeCustomerMonitors"`

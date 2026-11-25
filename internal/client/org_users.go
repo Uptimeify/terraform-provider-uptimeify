@@ -84,34 +84,37 @@ type NotificationTargets struct {
 // Organization is GET /api/organization. The tfsdk tags let the uptimeify_organization data
 // source store it as is; admin-only fields are absent (nil) for other roles.
 type Organization struct {
-	ID                              int64                 `json:"id" tfsdk:"id"`
-	PublicID                        string                `json:"publicId" tfsdk:"public_id"`
-	Name                            string                `json:"name" tfsdk:"name"`
-	Status                          string                `json:"status" tfsdk:"status"`
-	DeletionDueAt                   *string               `json:"deletionDueAt" tfsdk:"deletion_due_at"`
-	EmailLanguage                   *string               `json:"emailLanguage" tfsdk:"email_language"`
-	BillingEmail                    *string               `json:"billingEmail" tfsdk:"billing_email"`
-	BillingCycle                    *string               `json:"billingCycle" tfsdk:"billing_cycle"`
-	PaymentMethod                   *string               `json:"paymentMethod" tfsdk:"payment_method"`
-	DefaultNotificationChannels     *NotificationChannels `json:"defaultNotificationChannels" tfsdk:"default_notification_channels"`
-	DefaultNotificationTargets      *NotificationTargets  `json:"defaultNotificationTargets" tfsdk:"default_notification_targets"`
-	RequireMfaAdmins                *bool                 `json:"requireMfaAdmins" tfsdk:"require_mfa_admins"`
-	RequireMfaEditors               *bool                 `json:"requireMfaEditors" tfsdk:"require_mfa_editors"`
-	RequireMfaReadonly              *bool                 `json:"requireMfaReadonly" tfsdk:"require_mfa_readonly"`
-	RequireMfaCustomers             *bool                 `json:"requireMfaCustomers" tfsdk:"require_mfa_customers"`
-	CompanyName                     *string               `json:"companyName" tfsdk:"company_name"`
-	Street                          *string               `json:"street" tfsdk:"street"`
-	PostalCode                      *string               `json:"postalCode" tfsdk:"postal_code"`
-	City                            *string               `json:"city" tfsdk:"city"`
-	Country                         *string               `json:"country" tfsdk:"country"`
-	VatID                           *string               `json:"vatId" tfsdk:"vat_id"`
-	QuotaWebsitesLimit              *int64                `json:"quotaWebsitesLimit" tfsdk:"quota_websites_limit"`
-	QuotaIpsLimit                   *int64                `json:"quotaIpsLimit" tfsdk:"quota_ips_limit"`
-	QuotaSmsIncluded                *int64                `json:"quotaSmsIncluded" tfsdk:"quota_sms_included"`
-	QuotaMonthlyPriceCents          *int64                `json:"quotaMonthlyPriceCents" tfsdk:"quota_monthly_price_cents"`
-	QuotaExtraSmsPriceCents         *int64                `json:"quotaExtraSmsPriceCents" tfsdk:"quota_extra_sms_price_cents"`
-	QuotaAutoUpgradeEnabled         *bool                 `json:"quotaAutoUpgradeEnabled" tfsdk:"quota_auto_upgrade_enabled"`
-	SmsOverageSafetyCapCentsMonthly *int64                `json:"smsOverageSafetyCapCentsMonthly" tfsdk:"sms_overage_safety_cap_cents_monthly"`
+	ID                          int64                 `json:"id" tfsdk:"id"`
+	PublicID                    string                `json:"publicId" tfsdk:"public_id"`
+	Name                        string                `json:"name" tfsdk:"name"`
+	Status                      string                `json:"status" tfsdk:"status"`
+	DeletionDueAt               *string               `json:"deletionDueAt" tfsdk:"deletion_due_at"`
+	EmailLanguage               *string               `json:"emailLanguage" tfsdk:"email_language"`
+	BillingEmail                *string               `json:"billingEmail" tfsdk:"billing_email"`
+	ContractEmail               *string               `json:"contractEmail" tfsdk:"contract_email"`
+	BillingCycle                *string               `json:"billingCycle" tfsdk:"billing_cycle"`
+	PaymentMethod               *string               `json:"paymentMethod" tfsdk:"payment_method"`
+	DefaultNotificationChannels *NotificationChannels `json:"defaultNotificationChannels" tfsdk:"default_notification_channels"`
+	DefaultNotificationTargets  *NotificationTargets  `json:"defaultNotificationTargets" tfsdk:"default_notification_targets"`
+	// check type -> channel -> on/off; nil while never saved.
+	DefaultNotificationRules        map[string]map[string]bool `json:"defaultNotificationRules" tfsdk:"default_notification_rules"`
+	RequireMfaAdmins                *bool                      `json:"requireMfaAdmins" tfsdk:"require_mfa_admins"`
+	RequireMfaEditors               *bool                      `json:"requireMfaEditors" tfsdk:"require_mfa_editors"`
+	RequireMfaReadonly              *bool                      `json:"requireMfaReadonly" tfsdk:"require_mfa_readonly"`
+	RequireMfaCustomers             *bool                      `json:"requireMfaCustomers" tfsdk:"require_mfa_customers"`
+	CompanyName                     *string                    `json:"companyName" tfsdk:"company_name"`
+	Street                          *string                    `json:"street" tfsdk:"street"`
+	PostalCode                      *string                    `json:"postalCode" tfsdk:"postal_code"`
+	City                            *string                    `json:"city" tfsdk:"city"`
+	Country                         *string                    `json:"country" tfsdk:"country"`
+	VatID                           *string                    `json:"vatId" tfsdk:"vat_id"`
+	QuotaWebsitesLimit              *int64                     `json:"quotaWebsitesLimit" tfsdk:"quota_websites_limit"`
+	QuotaIpsLimit                   *int64                     `json:"quotaIpsLimit" tfsdk:"quota_ips_limit"`
+	QuotaSmsIncluded                *int64                     `json:"quotaSmsIncluded" tfsdk:"quota_sms_included"`
+	QuotaMonthlyPriceCents          *int64                     `json:"quotaMonthlyPriceCents" tfsdk:"quota_monthly_price_cents"`
+	QuotaExtraSmsPriceCents         *int64                     `json:"quotaExtraSmsPriceCents" tfsdk:"quota_extra_sms_price_cents"`
+	QuotaAutoUpgradeEnabled         *bool                      `json:"quotaAutoUpgradeEnabled" tfsdk:"quota_auto_upgrade_enabled"`
+	SmsOverageSafetyCapCentsMonthly *int64                     `json:"smsOverageSafetyCapCentsMonthly" tfsdk:"sms_overage_safety_cap_cents_monthly"`
 }
 
 func (c *Client) GetOrganization(ctx context.Context) (*Organization, error) {

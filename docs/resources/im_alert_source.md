@@ -29,6 +29,9 @@ resource "uptimeify_im_alert_source" "grafana" {
   hmac_secret_wo_version = 1
 
   maintenance_windows = [{ days_of_week = [7], from = "02:00", to = "04:00", timezone = "Europe/Berlin" }]
+
+  # One-off mute, e.g. during a migration; remove the line to end it early.
+  snooze_until = "2026-12-01T06:00:00+01:00"
 }
 
 # Custom webhook with a v2 attribute mapping and bearer auth.
@@ -82,6 +85,7 @@ output "billing_webhook_url" {
 - `ingest_token_rotation` (String) Any value; changing it rotates the ingest token. The old token keeps working until `secondary_expires_at`.
 - `maintenance_windows` (Attributes List) Recurring windows in which alerts are stored as suppressed instead of opening incidents. At most 20. (see [below for nested schema](#nestedatt--maintenance_windows))
 - `payload_mapping` (Attributes) How a vendor payload becomes an alert. Either the v2 `attributes` list or the v1 selector fields (`title`, `severity`, `status`, ...). Unset = not managed: the server keeps its mapping (a preset type starts with the preset mapping; read it with the data source); removing the block later keeps the last mapping. An import reads the stored mapping. Must stay unset for `type = "email"` (the server builds that mapping). (see [below for nested schema](#nestedatt--payload_mapping))
+- `snooze_until` (String) Suppress alerts of this source until this time. RFC3339 timestamp; unset = not snoozed (removing it ends the snooze). The API keeps a past time as it is, so an expired value shows no diff. The API answers in UTC with milliseconds, another spelling of the same instant is kept as written.
 - `url_token_enabled` (Boolean) `authMode.urlToken`. The server stores the flag; unset = not sent.
 
 ### Read-Only

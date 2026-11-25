@@ -41,6 +41,7 @@ output "zabbix_title_selector" {
 - `organization_id` (Number)
 - `payload_mapping` (Attributes) How a vendor payload becomes an alert. Either the v2 `attributes` list or the v1 selector fields (`title`, `severity`, `status`, ...). Unset = not managed: the server keeps its mapping (a preset type starts with the preset mapping; read it with the data source); removing the block later keeps the last mapping. An import reads the stored mapping. Must stay unset for `type = "email"` (the server builds that mapping). (see [below for nested schema](#nestedatt--payload_mapping))
 - `secondary_expires_at` (String) End of the grace period of the previous ingest token after a rotation.
+- `snooze_until` (String) Suppress alerts of this source until this time. RFC3339 timestamp; unset = not snoozed (removing it ends the snooze). The API keeps a past time as it is, so an expired value shows no diff. The API answers in UTC with milliseconds, another spelling of the same instant is kept as written.
 - `team_id` (Number) Team that owns incidents from this source.
 - `type` (String) A preset name from `GET /api/im/sources/presets` (e.g. `zabbix`, `datadog`, `grafana`, `alertmanager`, `sentry`, `beszel`, `custom`), `api` (no webhook URL, fed by `POST /api/im/events`) or `email`. Changing it replaces the source.
 - `updated_at` (String)

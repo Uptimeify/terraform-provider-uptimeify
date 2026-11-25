@@ -21,11 +21,20 @@ resource "uptimeify_organization_settings" "this" {
   city         = "Berlin"
   country      = "Germany"
 
+  # Notices of changes to the terms, the DPA and the privacy policy go here instead of to every admin.
+  contract_email = "legal@example.com"
+
   default_notification_channels = {
     email        = true
     sms          = false
     webhook      = false
     integrations = true
+  }
+
+  # Per check type: which channels alert for new customers.
+  default_notification_rules = {
+    http_status = { email = true, sms = true, webhook = false, integrations = true }
+    ssl_expiry  = { email = true, sms = false, webhook = false, integrations = false }
   }
 }
 ```
@@ -38,8 +47,10 @@ resource "uptimeify_organization_settings" "this" {
 - `billing_email` (String) Address for invoices (admins only). Unset = keep the current value.
 - `city` (String) Billing address. Unset = keep the current value.
 - `company_name` (String) Company name on invoices. Unset = keep the current value.
+- `contract_email` (String) Address that receives notices of changes to the terms, the DPA and the privacy policy (admins only). While none is stored every admin receives them; going back to that (null) is not possible here. Unset = keep the current value.
 - `country` (String) Billing country (free text; the server derives the ISO code). Changing it resets the VAT check. Unset = keep the current value.
 - `default_notification_channels` (Attributes) Channels switched on for new customers. Unset = keep. (see [below for nested schema](#nestedatt--default_notification_channels))
+- `default_notification_rules` (Map of Map of Boolean) Channels switched on per check type for new customers: check type (e.g. `http_status`, `ssl_expiry`) to channel (`email`, `sms`, `webhook`, `integrations`) to on/off. Stored as written and sent whole when it differs, so list every check type you want a rule for. Unset = keep.
 - `default_notification_targets` (Attributes) Who receives each channel for new customers: `customer`, `organization` or `both` (`webhook`: `organization` only). Unset = keep. (see [below for nested schema](#nestedatt--default_notification_targets))
 - `name` (String) Organization name. Unset = keep the current value.
 - `postal_code` (String) Billing address. Unset = keep the current value.

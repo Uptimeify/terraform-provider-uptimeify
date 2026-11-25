@@ -63,6 +63,8 @@ type statusPageModel struct {
 	Visibility               types.String `tfsdk:"visibility"`
 	ManagementType           types.String `tfsdk:"management_type"`
 	IsPublished              types.Bool   `tfsdk:"is_published"`
+	ShowRecentIncidents      types.Bool   `tfsdk:"show_recent_incidents"`
+	ShowRecentMaintenance    types.Bool   `tfsdk:"show_recent_maintenance"`
 	SubscriptionsEnabled     types.Bool   `tfsdk:"subscriptions_enabled"`
 	SubscriptionDelayMinutes types.Int64  `tfsdk:"subscription_delay_minutes"`
 	IncludeCustomerMonitors  types.Bool   `tfsdk:"include_customer_monitors"`
@@ -95,6 +97,8 @@ func (m *statusPageModel) fromAPI(p *client.StatusPage) {
 	m.Visibility = types.StringValue(p.Visibility)
 	m.ManagementType = types.StringValue(p.ManagementType)
 	m.IsPublished = types.BoolValue(p.IsPublished)
+	m.ShowRecentIncidents = types.BoolValue(p.ShowRecentIncidents)
+	m.ShowRecentMaintenance = types.BoolValue(p.ShowRecentMaintenance)
 	m.SubscriptionsEnabled = types.BoolValue(p.SubscriptionsEnabled)
 	m.SubscriptionDelayMinutes = types.Int64Value(p.SubscriptionDelayMinutes)
 	m.IncludeCustomerMonitors = types.BoolValue(p.IncludeCustomerMonitors)
@@ -162,6 +166,14 @@ func (r *statusPageResource) Metadata(_ context.Context, req resource.MetadataRe
 
 func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
+	showRecent := func(what, design string) schema.BoolAttribute {
+		return schema.BoolAttribute{Optional: true, Computed: true,
+			PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			Description: "Show the " + what + " history on the page. Unset = the server default at creation (`true`), then kept " +
+				"as is. Writing it also sets `" + design + "` of the page design, which is what the page renders. With a " +
+				"`uptimeify_status_page_design` for the same page set the switch there instead (or the same value in both): " +
+				"a later design change does not write back here."}
+	}
 	resp.Schema = schema.Schema{
 		Description: "A status page of one customer, or of the whole organization without `customer_id`. It shows its explicit " +
 			"components (`uptimeify_status_page_component`, the allowlist) and, only with `include_customer_monitors`, also " +
@@ -209,6 +221,8 @@ func (r *statusPageResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"access_password_set_at":     schema.StringAttribute{Computed: true},
 			"is_published": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Default `true`."},
+			"show_recent_incidents":   showRecent("incident", "show_incidents"),
+			"show_recent_maintenance": showRecent("maintenance", "show_maintenance"),
 			"subscriptions_enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Visitors may subscribe to e-mail updates. Default `true`."},
 			"subscription_delay_minutes": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(5),
@@ -283,6 +297,11 @@ func (r *statusPageResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	if !plan.IncludeCustomerMonitors.IsUnknown() { // unset: the server default for new pages
 		body["includeCustomerMonitors"] = plan.IncludeCustomerMonitors.ValueBool()
+	}
+	for k, v := range map[string]types.Bool{"showRecentIncidents": plan.ShowRecentIncidents, "showRecentMaintenance": plan.ShowRecentMaintenance} {
+		if !v.IsUnknown() && !v.IsNull() { // unset: the server default (true)
+			body[k] = v.ValueBool()
+		}
 	}
 	wantSlug := !plan.Slug.IsUnknown() && !plan.Slug.IsNull()
 	if wantSlug {
@@ -379,6 +398,12 @@ func (r *statusPageResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 	if !plan.IsPublished.Equal(state.IsPublished) {
 		patch["isPublished"] = plan.IsPublished.ValueBool()
+	}
+	for k, v := range map[string][2]types.Bool{"showRecentIncidents": {plan.ShowRecentIncidents, state.ShowRecentIncidents},
+		"showRecentMaintenance": {plan.ShowRecentMaintenance, state.ShowRecentMaintenance}} {
+		if !v[0].IsUnknown() && !v[0].IsNull() && !v[0].Equal(v[1]) {
+			patch[k] = v[0].ValueBool()
+		}
 	}
 	if !plan.SubscriptionsEnabled.Equal(state.SubscriptionsEnabled) {
 		patch["subscriptionsEnabled"] = plan.SubscriptionsEnabled.ValueBool()
