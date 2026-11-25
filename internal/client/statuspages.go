@@ -212,6 +212,7 @@ type ImStatuspageRule struct {
 	MinSeverity    string  `json:"minSeverity"`
 	TargetState    string  `json:"targetState"`
 	AutoResolve    bool    `json:"autoResolve"`
+	ComponentIDs   []int64 `json:"componentIds"` // null = none
 	Message        *string `json:"message"`
 	CreatedAt      string  `json:"createdAt"`
 	UpdatedAt      string  `json:"updatedAt"`

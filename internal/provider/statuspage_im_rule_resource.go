@@ -3,10 +3,13 @@ package provider
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -43,6 +46,7 @@ type imStatuspageRuleModel struct {
 	MinSeverity    types.String `tfsdk:"min_severity"`
 	TargetState    types.String `tfsdk:"target_state"`
 	AutoResolve    types.Bool   `tfsdk:"auto_resolve"`
+	ComponentIDs   types.Set    `tfsdk:"component_ids"`
 	Message        types.String `tfsdk:"message"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
@@ -56,9 +60,25 @@ func (m *imStatuspageRuleModel) fromAPI(r *client.ImStatuspageRule) {
 	m.MinSeverity = types.StringValue(r.MinSeverity)
 	m.TargetState = types.StringValue(r.TargetState)
 	m.AutoResolve = types.BoolValue(r.AutoResolve)
+	m.ComponentIDs = types.SetNull(types.Int64Type) // the API answers null for "none"
+	if len(r.ComponentIDs) > 0 {
+		ids := make([]attr.Value, len(r.ComponentIDs))
+		for i, id := range r.ComponentIDs {
+			ids[i] = types.Int64Value(id)
+		}
+		m.ComponentIDs = types.SetValueMust(types.Int64Type, ids)
+	}
 	m.Message = types.StringPointerValue(r.Message)
 	m.CreatedAt = types.StringValue(r.CreatedAt)
 	m.UpdatedAt = types.StringValue(r.UpdatedAt)
+}
+
+// ruleComponentIDs is the request value of component_ids: nil (JSON null) for unset = none.
+func ruleComponentIDs(ctx context.Context, s types.Set) []int64 {
+	var ids []int64
+	s.ElementsAs(ctx, &ids, false)
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 func NewImStatuspageRuleResource() resource.Resource { return &imStatuspageRuleResource{} }
@@ -88,6 +108,11 @@ func (r *imStatuspageRuleResource) Schema(_ context.Context, _ resource.SchemaRe
 				Validators:  []validator.String{stringvalidator.OneOf(client.StatusPageTargetStates...)}},
 			"auto_resolve": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Reset the page when the incident resolves. Default `true`."},
+			"component_ids": schema.SetAttribute{ElementType: types.Int64Type, Optional: true,
+				Description: "Numeric ids of components of `status_page_id` (`uptimeify_status_page_component`) the incident " +
+					"affects: they take `target_state` while it is open. At most 100. Unset = none (the page as a whole). A " +
+					"component of another page fails with 400 `statusPageComponentNotOnPage`.",
+				Validators: []validator.Set{setvalidator.SizeBetween(1, 100), setvalidator.ValueInt64sAre(int64validator.AtLeast(1))}},
 			"message": schema.StringAttribute{Optional: true,
 				Description: "Public text shown on the status page while this rule's override is active and the incident " +
 					"has no status page update yet. Up to 5000 characters, no surrounding whitespace (the API trims). Unset = no text.",
@@ -114,6 +139,7 @@ func (r *imStatuspageRuleResource) Create(ctx context.Context, req resource.Crea
 		"teamId": plan.TeamID.ValueInt64(), "statusPageId": plan.StatusPageID.ValueInt64(),
 		"minSeverity": plan.MinSeverity.ValueString(), "targetState": plan.TargetState.ValueString(),
 		"autoResolve": plan.AutoResolve.ValueBool(), "message": plan.Message.ValueStringPointer(),
+		"componentIds": ruleComponentIDs(ctx, plan.ComponentIDs),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Creating status page rule failed", err.Error())
@@ -168,6 +194,10 @@ func (r *imStatuspageRuleResource) Update(ctx context.Context, req resource.Upda
 	if !plan.Message.Equal(state.Message) {
 		patch["message"] = plan.Message.ValueStringPointer() // null clears it
 	}
+	// The API drops the components when the page changes without them, so they go along then.
+	if !plan.ComponentIDs.Equal(state.ComponentIDs) || !plan.StatusPageID.Equal(state.StatusPageID) {
+		patch["componentIds"] = ruleComponentIDs(ctx, plan.ComponentIDs)
+	}
 	rule, err := r.client.UpdateImStatuspageRule(ctx, state.ID.ValueString(), patch)
 	if err != nil {
 		resp.Diagnostics.AddError("Updating status page rule failed", err.Error())
@@ -213,6 +243,7 @@ func (d *imStatuspageRuleDataSource) Schema(_ context.Context, _ datasource.Sche
 			"min_severity":    dschema.StringAttribute{Computed: true},
 			"target_state":    dschema.StringAttribute{Computed: true},
 			"auto_resolve":    dschema.BoolAttribute{Computed: true},
+			"component_ids":   dschema.SetAttribute{ElementType: types.Int64Type, Computed: true, Description: "Components the incident affects; null = none."},
 			"message":         dschema.StringAttribute{Computed: true},
 			"created_at":      dschema.StringAttribute{Computed: true},
 			"updated_at":      dschema.StringAttribute{Computed: true},

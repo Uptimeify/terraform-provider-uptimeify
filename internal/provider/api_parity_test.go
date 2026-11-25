@@ -141,8 +141,6 @@ var parityIgnored = map[string]string{
 	"PATCH /api/organization quotaAutoUpgradeEnabled":            "API tokens are refused (nonUserSessionForbidden)",
 	"POST /api/im/routing escalationPolicyId":                    "deprecated, accepted and ignored by the API",
 	"PATCH /api/im/routing/{id} escalationPolicyId":              "deprecated, accepted and ignored by the API",
-	"POST /api/im/statuspage-rules componentIds":                 "not mapped yet: components an IM status page rule affects",
-	"PATCH /api/im/statuspage-rules/{id} componentIds":           "not mapped yet: components an IM status page rule affects",
 	"POST /api/status-pages customDomainHostname":                "uptimeify_status_page_domain owns the custom domain",
 	"PATCH /api/status-pages/{id} designConfig":                  "uptimeify_status_page_design owns the design",
 	"PATCH /api/status-pages/{id} audienceGroups":                "uptimeify_status_page_audience_groups owns them (they name components, which need the page first)",

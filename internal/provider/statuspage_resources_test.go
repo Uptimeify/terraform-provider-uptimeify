@@ -956,3 +956,76 @@ func TestStatusPageShowRecent(t *testing.T) {
 		}
 	}
 }
+
+// Unit: component_ids is sent as a sorted list (null for unset), read back as a set (null and []
+// are "none"), and goes along with a page change even when unchanged, because the API drops it then.
+func TestImStatuspageRuleComponentIDs(t *testing.T) {
+	rule := map[string]any{"id": 9, "organizationId": 2, "teamId": 1, "statusPageId": 5, "minSeverity": "sev2",
+		"targetState": "degraded", "autoResolve": true, "componentIds": nil, "message": nil, "createdAt": "c", "updatedAt": "u"}
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		raw, _ := json.Marshal(body)
+		bodies = append(bodies, r.Method+" "+string(raw))
+		for k, v := range body {
+			rule[k] = v
+		}
+		if ids, _ := rule["componentIds"].([]any); len(ids) == 0 {
+			rule["componentIds"] = nil // the API stores null for an empty list
+		}
+		_ = json.NewEncoder(w).Encode(rule)
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	r := &imStatuspageRuleResource{client: client.New(srv.URL, "wsm_test", "test")}
+	var sch resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &sch)
+	set := func(ids ...int64) types.Set {
+		if ids == nil {
+			return types.SetNull(types.Int64Type)
+		}
+		v, _ := types.SetValueFrom(ctx, types.Int64Type, ids)
+		return v
+	}
+	m := imStatuspageRuleModel{ID: types.StringUnknown(), OrganizationID: types.Int64Unknown(), TeamID: types.Int64Value(1),
+		StatusPageID: types.Int64Value(5), MinSeverity: types.StringValue("sev2"), TargetState: types.StringValue("degraded"),
+		AutoResolve: types.BoolValue(true), ComponentIDs: set(12, 11), CreatedAt: types.StringUnknown(), UpdatedAt: types.StringUnknown()}
+	plan := tfsdk.Plan{Schema: sch.Schema}
+	if d := plan.Set(ctx, &m); d.HasError() {
+		t.Fatal(d)
+	}
+	created := resource.CreateResponse{State: tfsdk.State{Schema: sch.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &created)
+	var got imStatuspageRuleModel
+	created.State.Get(ctx, &got)
+	if created.Diagnostics.HasError() || !strings.Contains(bodies[0], `"componentIds":[11,12]`) || !got.ComponentIDs.Equal(set(11, 12)) {
+		t.Fatalf("create: %v, bodies %q, state %v", created.Diagnostics, bodies, got.ComponentIDs)
+	}
+
+	state := created.State
+	for _, step := range []struct {
+		page int64
+		ids  types.Set
+		want string
+	}{
+		{5, set(11, 12), `PATCH {}`},                                        // unchanged: no componentIds
+		{6, set(11, 12), `PATCH {"componentIds":[11,12],"statusPageId":6}`}, // page change resends them
+		{6, set(), `PATCH {"componentIds":null}`},                           // removed: null clears, read back as null
+	} {
+		next := got
+		next.StatusPageID, next.ComponentIDs = types.Int64Value(step.page), step.ids
+		if d := plan.Set(ctx, &next); d.HasError() {
+			t.Fatal(d)
+		}
+		bodies = nil
+		upd := resource.UpdateResponse{State: tfsdk.State{Schema: sch.Schema}}
+		r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &upd)
+		upd.State.Get(ctx, &got)
+		if upd.Diagnostics.HasError() || len(bodies) != 1 || bodies[0] != step.want || !got.ComponentIDs.Equal(step.ids) {
+			t.Fatalf("update: %v, bodies %q (want %q), state %v", upd.Diagnostics, bodies, step.want, got.ComponentIDs)
+		}
+		state = upd.State
+	}
+}
