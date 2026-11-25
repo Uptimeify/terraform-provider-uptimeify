@@ -162,7 +162,7 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"email_language":            optStr("Language of mails to this customer. Unset = organization language."),
 			"company_name":              optStr("", trimmedText),
 			"notification_email":        optStr("Alert recipient address of this customer.", trimmedText),
-			"notification_phone_number": optStr("Alert SMS number of this customer.", trimmedText),
+			"notification_phone_number": optStr("Alert SMS number of this customer, in international format (`+491701234567`)."+smsCountryNote, trimmedText),
 			"custom_fields": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: keep,
 				Description: "Values of the organization's custom fields as a JSON object (`jsonencode({ contract = \"A-1\" })`), keyed by `field_key`. Replaced as a whole.",
 				Validators:  []validator.String{jsonObject{}}},
@@ -196,6 +196,9 @@ func (r *customerResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 const alertSwitchNote = "Covers only notifications to the organization (its own channels and the organization " +
 	"recipient of the email/SMS fallback); channels the customer created in their own account are never affected, the " +
 	"customer stops those by disabling or deleting them. A set value replaces the package value for this customer."
+
+// smsCountryNote: the API stores SMS targets from these countries only (since 2026-11-18).
+const smsCountryNote = " A number outside the EU/EEA, Switzerland and the UK is rejected with 400 `smsCountryNotAllowed`."
 
 const smsLimitNote = "Exception: SMS through the customer's own channels still counts against the package's monthly SMS " +
 	"limit per customer and the organization's overage limit; with the package SMS switch off and no limit set, that limit is 0."

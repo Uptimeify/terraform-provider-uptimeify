@@ -156,7 +156,7 @@ func (r *notificationChannelResource) Schema(_ context.Context, _ resource.Schem
 			"name": schema.StringAttribute{Required: true, Validators: []validator.String{trimmedText, stringvalidator.LengthAtMost(100)}},
 			"config": schema.StringAttribute{Required: true, Validators: []validator.String{jsonObject{}},
 				Description: "Provider settings without secrets, as a JSON object (`jsonencode({ email = \"ops@example.com\" })`). " +
-					"Keys removed here are cleared."},
+					"Keys removed here are cleared. `type = \"sms\"`: numbers in E.164 form (`+491701234567`)." + smsCountryNote},
 			"secret_config_wo": schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true, Validators: []validator.String{jsonObject{}},
 				Description: "Write-only secret settings as a JSON object, stored encrypted. Sent with create and whenever " +
 					"`secret_config_wo_version` changes; keys left out keep their stored value. A secret cannot be removed " +

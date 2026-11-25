@@ -41,7 +41,7 @@ resource "uptimeify_notification_channel" "slack" {
 
 ### Required
 
-- `config` (String) Provider settings without secrets, as a JSON object (`jsonencode({ email = "ops@example.com" })`). Keys removed here are cleared.
+- `config` (String) Provider settings without secrets, as a JSON object (`jsonencode({ email = "ops@example.com" })`). Keys removed here are cleared. `type = "sms"`: numbers in E.164 form (`+491701234567`). A number outside the EU/EEA, Switzerland and the UK is rejected with 400 `smsCountryNotAllowed`.
 - `name` (String)
 - `type` (String) Channel type: `email`, `sms`, `webhook`, `incident_management`, `slack`, `discord`, `teams`, `pagerduty`, `pushover`, `opsgenie`, `matrix`, `jira`, `allquiet`, `telegram`, `googlechat`, `mattermost`, `rocketchat`, `ntfy`, `gotify`, `ilert`, `grafanaoncall`, `incidentio`, `squadcast`, `github`, `gitlab`, `linear`, `servicenow`, `lark`, `dingtalk`, `wecom`.
 
