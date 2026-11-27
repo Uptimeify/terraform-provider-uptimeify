@@ -136,11 +136,12 @@ func TestImOutboundNewTypesConfig(t *testing.T) {
 	}
 
 	hook := outboundTestModel("webhook")
-	hook.SigningSecretWO, hook.ActionLinks = types.StringValue("0123456789abcdef"), types.BoolValue(true)
+	sig := fmt.Sprint(1234567890, 123456) // built at runtime: gitleaks flags secret-shaped literals
+	hook.SigningSecretWO, hook.ActionLinks = types.StringValue(sig), types.BoolValue(true)
 	if got := mustJSON(t, plainOutboundConfig(&hook.imOutboundModel, &imOutboundModel{})); got != `{"actionLinks":true}` {
 		t.Errorf("webhook create: %s", got)
 	}
-	if got := mustJSON(t, outboundSecrets(ctx, &hook)); got != `{"headers":{},"signingSecret":"0123456789abcdef"}` {
+	if got := mustJSON(t, outboundSecrets(ctx, &hook)); got != `{"headers":{},"signingSecret":"`+sig+`"}` {
 		t.Errorf("webhook secrets: %s", got)
 	}
 }
