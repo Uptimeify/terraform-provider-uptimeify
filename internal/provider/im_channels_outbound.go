@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 
@@ -56,8 +57,20 @@ type imOutboundModel struct {
 	HasAPIToken    types.Bool   `tfsdk:"has_api_token"`
 	HasRoutingKey  types.Bool   `tfsdk:"has_routing_key"`
 	HasAPIKey      types.Bool   `tfsdk:"has_api_key"`
-	CreatedAt      types.String `tfsdk:"created_at"`
-	UpdatedAt      types.String `tfsdk:"updated_at"`
+	// Added with the slack_app, mattermost, googlechat and linear types.
+	HasSigningSecret           types.Bool   `tfsdk:"has_signing_secret"`
+	HasInboundToken            types.Bool   `tfsdk:"has_inbound_token"`
+	ActionLinks                types.Bool   `tfsdk:"action_links"`
+	MinimalPayload             types.Bool   `tfsdk:"minimal_payload"`
+	WorkspaceID                types.Int64  `tfsdk:"workspace_id"`
+	ChannelID                  types.String `tfsdk:"channel_id"`
+	ReadOnly                   types.Bool   `tfsdk:"read_only"`
+	ThreadCommentSync          types.Bool   `tfsdk:"thread_comment_sync"`
+	IncidentChannelMinSeverity types.String `tfsdk:"incident_channel_min_severity"`
+	IncidentChannelPrivate     types.Bool   `tfsdk:"incident_channel_private"`
+	LinearTeamID               types.String `tfsdk:"linear_team_id"`
+	CreatedAt                  types.String `tfsdk:"created_at"`
+	UpdatedAt                  types.String `tfsdk:"updated_at"`
 }
 
 // imOutboundResourceModel adds the write-only secrets (config only, never in state).
@@ -69,30 +82,70 @@ type imOutboundResourceModel struct {
 	APITokenWO       types.String `tfsdk:"api_token_wo"`
 	RoutingKeyWO     types.String `tfsdk:"routing_key_wo"`
 	APIKeyWO         types.String `tfsdk:"api_key_wo"`
+	SigningSecretWO  types.String `tfsdk:"signing_secret_wo"`
 	SecretsWOVersion types.Int64  `tfsdk:"secrets_wo_version"`
 }
 
 // outboundFieldTypes: the types each config attribute belongs to. The API keeps keys of other
 // types unencrypted and returns them, so a secret on the wrong type would leak.
+// Mirrors validateIntegrationConfigShape and SECRET_FIELDS of the app (outbound-access.ts,
+// outbound-secrets.ts).
+var chatTypes = []string{"slack", "teams", "discord", "mattermost", "googlechat"}
+
 var outboundFieldTypes = map[string][]string{
-	"webhook_url_wo":  {"slack", "teams", "discord", "webhook"},
-	"bearer_token_wo": {"webhook"},
-	"headers_wo":      {"webhook"},
-	"api_token_wo":    {"jira"},
-	"email":           {"jira"},
-	"base_url":        {"jira"},
-	"project_key":     {"jira"},
-	"routing_key_wo":  {"pagerduty_v2"},
-	"api_key_wo":      {"opsgenie"},
+	"webhook_url_wo":                append(slices.Clone(chatTypes), "webhook"),
+	"minimal_payload":               chatTypes,
+	"bearer_token_wo":               {"webhook"},
+	"headers_wo":                    {"webhook"},
+	"signing_secret_wo":             {"webhook"},
+	"action_links":                  {"webhook"},
+	"workspace_id":                  {"slack_app"},
+	"channel_id":                    {"slack_app"},
+	"read_only":                     {"slack_app"},
+	"thread_comment_sync":           {"slack_app"},
+	"incident_channel_min_severity": {"slack_app"},
+	"incident_channel_private":      {"slack_app"},
+	"api_token_wo":                  {"jira"},
+	"email":                         {"jira"},
+	"base_url":                      {"jira"},
+	"project_key":                   {"jira"},
+	"routing_key_wo":                {"pagerduty_v2"},
+	"api_key_wo":                    {"opsgenie", "linear"},
+	"linear_team_id":                {"linear"},
 }
 
 func (m *imOutboundResourceModel) configFields() map[string]attr.Value {
-	return map[string]attr.Value{
+	f := m.plainFields()
+	for k, v := range map[string]attr.Value{
 		"webhook_url_wo": m.WebhookURLWO, "bearer_token_wo": m.BearerTokenWO, "headers_wo": m.HeadersWO,
-		"api_token_wo": m.APITokenWO, "email": m.Email, "base_url": m.BaseURL, "project_key": m.ProjectKey,
-		"routing_key_wo": m.RoutingKeyWO, "api_key_wo": m.APIKeyWO,
+		"signing_secret_wo": m.SigningSecretWO, "api_token_wo": m.APITokenWO, "routing_key_wo": m.RoutingKeyWO,
+		"api_key_wo": m.APIKeyWO,
+	} {
+		f[k] = v
+	}
+	return f
+}
+
+// plainFields are the non-secret config attributes, keyed by attribute name.
+func (m *imOutboundModel) plainFields() map[string]attr.Value {
+	return map[string]attr.Value{
+		"email": m.Email, "base_url": m.BaseURL, "project_key": m.ProjectKey, "linear_team_id": m.LinearTeamID,
+		"minimal_payload": m.MinimalPayload, "action_links": m.ActionLinks, "workspace_id": m.WorkspaceID,
+		"channel_id": m.ChannelID, "read_only": m.ReadOnly, "thread_comment_sync": m.ThreadCommentSync,
+		"incident_channel_min_severity": m.IncidentChannelMinSeverity, "incident_channel_private": m.IncidentChannelPrivate,
 	}
 }
+
+// plainAPIKeys maps plainFields names to the API config keys.
+var plainAPIKeys = map[string]string{
+	"email": "email", "base_url": "baseUrl", "project_key": "projectKey", "linear_team_id": "linearTeamId",
+	"minimal_payload": "minimalPayload", "action_links": "actionLinks", "workspace_id": "workspaceId",
+	"channel_id": "channelId", "read_only": "readOnly", "thread_comment_sync": "threadCommentSync",
+	"incident_channel_min_severity": "incidentChannelMinSeverity", "incident_channel_private": "incidentChannelPrivate",
+}
+
+// isTrue: the API leaves a boolean switch out until it is set; absent = false.
+func isTrue(b *bool) types.Bool { return types.BoolValue(b != nil && *b) }
 
 func (m *imOutboundModel) fromAPI(o *client.ImOutbound) {
 	m.ID = types.StringValue(strconv.FormatInt(o.ID, 10))
@@ -113,6 +166,17 @@ func (m *imOutboundModel) fromAPI(o *client.ImOutbound) {
 	m.HasAPIToken = types.BoolValue(o.Config.HasAPIToken)
 	m.HasRoutingKey = types.BoolValue(o.Config.HasRoutingKey)
 	m.HasAPIKey = types.BoolValue(o.Config.HasAPIKey)
+	m.HasSigningSecret = types.BoolValue(o.Config.HasSigningSecret)
+	m.HasInboundToken = types.BoolValue(o.Config.HasInboundToken)
+	m.ActionLinks = isTrue(o.Config.ActionLinks)
+	m.MinimalPayload = isTrue(o.Config.MinimalPayload)
+	m.WorkspaceID = types.Int64PointerValue(o.Config.WorkspaceID)
+	m.ChannelID = types.StringPointerValue(o.Config.ChannelID)
+	m.ReadOnly = isTrue(o.Config.ReadOnly)
+	m.ThreadCommentSync = isTrue(o.Config.ThreadCommentSync)
+	m.IncidentChannelMinSeverity = types.StringPointerValue(o.Config.IncidentChannelMinSeverity)
+	m.IncidentChannelPrivate = isTrue(o.Config.IncidentChannelPrivate)
+	m.LinearTeamID = types.StringPointerValue(o.Config.LinearTeamID)
 	m.CreatedAt = types.StringValue(o.CreatedAt)
 	m.UpdatedAt = types.StringValue(o.UpdatedAt)
 }
@@ -142,18 +206,27 @@ func (r *imOutboundResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			Description: d + " Write-only: sent on create and whenever `secrets_wo_version` changes."}
 	}
 	has := func(d string) schema.BoolAttribute { return schema.BoolAttribute{Computed: true, Description: d} }
+	flag := func(d string) schema.BoolAttribute {
+		return schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
+			Description: d + " Default `false`."}
+	}
 	resp.Schema = schema.Schema{
-		Description: "An Incident Management outbound integration: forwards incident events to Slack, Microsoft Teams, " +
-			"Discord, Jira, PagerDuty (Events v2), Opsgenie or a generic webhook. Incident Management must be active for " +
-			"the organization. URLs, tokens, keys and header values are secrets the API never returns, so they are " +
-			"write-only here; `has_*` tells whether one is stored. Import with the numeric id.",
+		Description: "An Incident Management outbound integration: forwards incident events to Slack (incoming webhook " +
+			"or the Uptimeify Slack app), Microsoft Teams, Discord, Mattermost, Google Chat, Jira, Linear, PagerDuty " +
+			"(Events v2), Opsgenie or a generic webhook. Incident Management must be active for the organization. URLs, " +
+			"tokens, keys and header values are secrets the API never returns, so they are write-only here; `has_*` " +
+			"tells whether one is stored. A stored secret cannot be cleared by removing it from the configuration (the " +
+			"API keeps it); replace the integration instead. `slack_app` posts through a Slack workspace that an org " +
+			"admin connected in the Uptimeify UI (OAuth); Terraform cannot connect one, it only references it by " +
+			"`workspace_id`. Import with the numeric id.",
 		Attributes: map[string]schema.Attribute{
 			"id":              schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "Numeric integration id."},
 			"organization_id": schema.Int64Attribute{Computed: true, PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}},
 			"team_id": schema.Int64Attribute{Optional: true, Description: "Owning team; unset = organization-wide (needs an org admin).",
 				Validators: []validator.Int64{int64validator.AtLeast(1)}},
 			"type": schema.StringAttribute{Required: true,
-				Description:   "`slack`, `teams`, `discord`, `jira`, `pagerduty_v2`, `opsgenie` or `webhook`. Changing it replaces the integration.",
+				Description: "`slack`, `slack_app`, `teams`, `discord`, `mattermost`, `googlechat`, `jira`, `linear`, " +
+					"`pagerduty_v2`, `opsgenie` or `webhook`. Changing it replaces the integration.",
 				Validators:    []validator.String{stringvalidator.OneOf(client.ImOutboundTypes...)},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"name": schema.StringAttribute{Required: true, Description: "1 to 200 characters, no surrounding whitespace.",
@@ -171,14 +244,41 @@ func (r *imOutboundResource) Schema(_ context.Context, _ resource.SchemaRequest,
 					"`comment`, `resolved`. Unset = all, except `jira`, where the server stores `[\"incident_created\"]`. " +
 					"Removing it from the configuration keeps the stored list.",
 				Validators: []validator.List{listvalidator.ValueStringsAre(stringvalidator.OneOf(client.ImOutboundEventKinds...))}},
-			"webhook_url_wo":  secret("`slack`/`teams`/`discord`/`webhook`: target URL (public http(s)), required."),
+			"webhook_url_wo":  secret("`slack`/`teams`/`discord`/`mattermost`/`googlechat`/`webhook`: target URL (public http(s)), required."),
 			"bearer_token_wo": secret("`webhook`: sent as `Authorization: Bearer`."),
 			"headers_wo": schema.MapAttribute{ElementType: types.StringType, Optional: true, WriteOnly: true, Sensitive: true,
 				Description: "`webhook`: extra request headers. Write-only: sent on create and whenever `secrets_wo_version` " +
 					"changes, then replacing the stored set (unset = remove all)."},
-			"api_token_wo":       secret("`jira`: API token, required."),
-			"routing_key_wo":     secret("`pagerduty_v2`: integration routing key, required."),
-			"api_key_wo":         secret("`opsgenie`: API key, required."),
+			"api_token_wo":   secret("`jira`: API token, required."),
+			"routing_key_wo": secret("`pagerduty_v2`: integration routing key, required."),
+			"api_key_wo":     secret("`opsgenie`/`linear`: API key, required."),
+			"signing_secret_wo": schema.StringAttribute{Optional: true, WriteOnly: true, Sensitive: true,
+				Validators: []validator.String{stringvalidator.LengthAtLeast(16)},
+				Description: "`webhook`: HMAC key, at least 16 characters. Every delivery then carries `X-Webhook-Signature`, " +
+					"the hex HMAC-SHA256 of the raw body. Write-only: sent on create and whenever `secrets_wo_version` changes."},
+			"action_links": flag("`webhook`: the payload of an open incident carries signed `actions.resolveUrl` (and " +
+				"`actions.acknowledgeUrl` until acknowledged), valid 24 hours, usable without an Uptimeify account by anyone " +
+				"who can read the payload."),
+			"minimal_payload": flag("`slack`/`teams`/`discord`/`mattermost`/`googlechat`: the message carries only severity, " +
+				"title, event kind and link (no team, status, comment text, values or actor)."),
+			"workspace_id": schema.Int64Attribute{Optional: true, Validators: []validator.Int64{int64validator.AtLeast(1)},
+				Description: "`slack_app`: id of a Slack workspace connected to the organization (connected in the UI), required."},
+			"channel_id": schema.StringAttribute{Optional: true,
+				Validators:  []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[CG][A-Z0-9]{2,20}$`), "must be a Slack channel id (C... or G...)")},
+				Description: "`slack_app`: Slack channel id (starts with `C` or `G`), not the channel name, required."},
+			"read_only": flag("`slack_app`: card without action buttons, for stakeholder channels."),
+			"thread_comment_sync": flag("`slack_app`: replies of linked users in the thread of an incident card are stored " +
+				"as timeline comments (needs the Events subscription of the Slack app)."),
+			"incident_channel_min_severity": schema.StringAttribute{Optional: true, Validators: sevValidator,
+				Description: "`slack_app`: incidents of this severity or worse (`sev1` to `sev4`) also get their own Slack " +
+					"channel, archived on resolve. Unset = off."},
+			"incident_channel_private": flag("`slack_app`: create that incident channel as a private channel (needs the " +
+				"bot scope `groups:write`). Only takes effect with `incident_channel_min_severity`."),
+			"linear_team_id": schema.StringAttribute{Optional: true,
+				Validators:  []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`), "must be a Linear team id (UUID)")},
+				Description: "`linear`: id (UUID) of the Linear team issues are created in, not the team key, required."},
+			"has_signing_secret": has("Whether a webhook signing secret is stored."),
+			"has_inbound_token":  has("`jira`: whether the back channel from Jira is switched on (managed outside Terraform)."),
 			"secrets_wo_version": schema.Int64Attribute{Optional: true, Description: "Change to resend every `*_wo` value."},
 			"email":              schema.StringAttribute{Optional: true, Description: "`jira`: account email, required."},
 			"base_url":           schema.StringAttribute{Optional: true, Description: "`jira`: site URL, https only, required."},
@@ -188,7 +288,7 @@ func (r *imOutboundResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"has_headers":        has("Whether custom headers are stored."),
 			"has_api_token":      has("Whether a Jira API token is stored."),
 			"has_routing_key":    has("Whether a PagerDuty routing key is stored."),
-			"has_api_key":        has("Whether an Opsgenie API key is stored."),
+			"has_api_key":        has("Whether an Opsgenie or Linear API key is stored."),
 			"created_at":         schema.StringAttribute{Computed: true, PlanModifiers: keep},
 			"updated_at":         schema.StringAttribute{Computed: true},
 		},
@@ -220,7 +320,7 @@ func (r *imOutboundResource) Configure(_ context.Context, req resource.Configure
 func outboundSecrets(ctx context.Context, cfg *imOutboundResourceModel) map[string]any {
 	out := map[string]any{}
 	for key, v := range map[string]types.String{"webhookUrl": cfg.WebhookURLWO, "bearerToken": cfg.BearerTokenWO,
-		"apiToken": cfg.APITokenWO, "routingKey": cfg.RoutingKeyWO, "apiKey": cfg.APIKeyWO} {
+		"apiToken": cfg.APITokenWO, "routingKey": cfg.RoutingKeyWO, "apiKey": cfg.APIKeyWO, "signingSecret": cfg.SigningSecretWO} {
 		if !v.IsNull() {
 			out[key] = v.ValueString()
 		}
@@ -256,13 +356,22 @@ func outboundFilters(ctx context.Context, m *imOutboundModel, fallback types.Lis
 	return f
 }
 
-// plainOutboundConfig returns the changed non-secret config keys; a removed value is sent as null.
+// plainOutboundConfig returns the changed non-secret config keys of the plan's type; a removed
+// value is sent as null (the switches fall back to false through their default, never null).
 func plainOutboundConfig(plan, prev *imOutboundModel) map[string]any {
 	out := map[string]any{}
-	for key, v := range map[string][2]types.String{"email": {plan.Email, prev.Email},
-		"baseUrl": {plan.BaseURL, prev.BaseURL}, "projectKey": {plan.ProjectKey, prev.ProjectKey}} {
-		if !v[0].Equal(v[1]) {
-			out[key] = v[0].ValueStringPointer()
+	prevFields := prev.plainFields()
+	for name, v := range plan.plainFields() {
+		if v.IsUnknown() || v.Equal(prevFields[name]) || !slices.Contains(outboundFieldTypes[name], plan.Type.ValueString()) {
+			continue
+		}
+		switch t := v.(type) {
+		case types.String:
+			out[plainAPIKeys[name]] = t.ValueStringPointer()
+		case types.Bool:
+			out[plainAPIKeys[name]] = t.ValueBoolPointer()
+		case types.Int64:
+			out[plainAPIKeys[name]] = t.ValueInt64Pointer()
 		}
 	}
 	return out

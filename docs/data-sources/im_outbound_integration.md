@@ -32,21 +32,32 @@ output "jira_project" {
 
 ### Read-Only
 
+- `action_links` (Boolean) `webhook`: the payload of an open incident carries signed `actions.resolveUrl` (and `actions.acknowledgeUrl` until acknowledged), valid 24 hours, usable without an Uptimeify account by anyone who can read the payload. Default `false`.
 - `base_url` (String) `jira`: site URL, https only, required.
+- `channel_id` (String) `slack_app`: Slack channel id (starts with `C` or `G`), not the channel name, required.
 - `created_at` (String)
 - `email` (String) `jira`: account email, required.
 - `event_kinds` (List of String) Events to forward: `incident_created`, `acknowledged`, `severity_changed`, `status_changed`, `comment`, `resolved`. Unset = all, except `jira`, where the server stores `["incident_created"]`. Removing it from the configuration keeps the stored list.
 - `filter_severities` (List of String) Only these severities, `sev1` to `sev4`. Unset = all.
 - `filter_team_ids` (List of Number) Only incidents of these teams (of the organization). Unset = all.
-- `has_api_key` (Boolean) Whether an Opsgenie API key is stored.
+- `has_api_key` (Boolean) Whether an Opsgenie or Linear API key is stored.
 - `has_api_token` (Boolean) Whether a Jira API token is stored.
 - `has_bearer_token` (Boolean) Whether a bearer token is stored.
 - `has_headers` (Boolean) Whether custom headers are stored.
+- `has_inbound_token` (Boolean) `jira`: whether the back channel from Jira is switched on (managed outside Terraform).
 - `has_routing_key` (Boolean) Whether a PagerDuty routing key is stored.
+- `has_signing_secret` (Boolean) Whether a webhook signing secret is stored.
 - `has_webhook_url` (Boolean) Whether a webhook URL is stored.
+- `incident_channel_min_severity` (String) `slack_app`: incidents of this severity or worse (`sev1` to `sev4`) also get their own Slack channel, archived on resolve. Unset = off.
+- `incident_channel_private` (Boolean) `slack_app`: create that incident channel as a private channel (needs the bot scope `groups:write`). Only takes effect with `incident_channel_min_severity`. Default `false`.
 - `is_active` (Boolean) Default `true`.
+- `linear_team_id` (String) `linear`: id (UUID) of the Linear team issues are created in, not the team key, required.
+- `minimal_payload` (Boolean) `slack`/`teams`/`discord`/`mattermost`/`googlechat`: the message carries only severity, title, event kind and link (no team, status, comment text, values or actor). Default `false`.
 - `organization_id` (Number)
 - `project_key` (String) `jira`: project key, required.
+- `read_only` (Boolean) `slack_app`: card without action buttons, for stakeholder channels. Default `false`.
 - `team_id` (Number) Owning team; unset = organization-wide (needs an org admin).
-- `type` (String) `slack`, `teams`, `discord`, `jira`, `pagerduty_v2`, `opsgenie` or `webhook`. Changing it replaces the integration.
+- `thread_comment_sync` (Boolean) `slack_app`: replies of linked users in the thread of an incident card are stored as timeline comments (needs the Events subscription of the Slack app). Default `false`.
+- `type` (String) `slack`, `slack_app`, `teams`, `discord`, `mattermost`, `googlechat`, `jira`, `linear`, `pagerduty_v2`, `opsgenie` or `webhook`. Changing it replaces the integration.
 - `updated_at` (String)
+- `workspace_id` (Number) `slack_app`: id of a Slack workspace connected to the organization (connected in the UI), required.

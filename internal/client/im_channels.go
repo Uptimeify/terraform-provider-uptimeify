@@ -14,7 +14,7 @@ var ImChannelTypes = []string{"webhook", "email", "slack"}
 
 // ImOutboundTypes and ImOutboundEventKinds are type and eventKind of the im-outbound contract.
 var (
-	ImOutboundTypes      = []string{"slack", "teams", "discord", "jira", "pagerduty_v2", "opsgenie", "webhook"}
+	ImOutboundTypes      = []string{"slack", "slack_app", "teams", "discord", "mattermost", "googlechat", "jira", "linear", "pagerduty_v2", "opsgenie", "webhook"}
 	ImOutboundEventKinds = []string{"incident_created", "acknowledged", "severity_changed", "status_changed", "comment", "resolved"}
 )
 
@@ -73,6 +73,18 @@ type ImOutboundConfig struct {
 	Email          *string `json:"email"`
 	BaseURL        *string `json:"baseUrl"`
 	ProjectKey     *string `json:"projectKey"`
+
+	HasSigningSecret           bool    `json:"hasSigningSecret"`
+	HasInboundToken            bool    `json:"hasInboundToken"`
+	ActionLinks                *bool   `json:"actionLinks"`
+	MinimalPayload             *bool   `json:"minimalPayload"`
+	WorkspaceID                *int64  `json:"workspaceId"`
+	ChannelID                  *string `json:"channelId"`
+	ReadOnly                   *bool   `json:"readOnly"`
+	ThreadCommentSync          *bool   `json:"threadCommentSync"`
+	IncidentChannelMinSeverity *string `json:"incidentChannelMinSeverity"`
+	IncidentChannelPrivate     *bool   `json:"incidentChannelPrivate"`
+	LinearTeamID               *string `json:"linearTeamId"`
 }
 
 // ImOutboundFilters reads only the camelCase successor eventKinds (event_kinds is its deprecated twin).

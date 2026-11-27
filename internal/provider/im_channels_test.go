@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
+	"slices"
 	"testing"
 	"time"
 
@@ -87,6 +90,86 @@ func TestImOutboundPatch(t *testing.T) {
 	plan.SecretsWOVersion = types.Int64Value(2)
 	if got := mustJSON(t, outboundPatch(ctx, &plan, &state, &cfg)); got != `{"config":{"bearerToken":"tok","headers":{}}}` {
 		t.Errorf("version bump: %s", got)
+	}
+}
+
+// outboundTestModel: every attribute known, switches at their default false.
+func outboundTestModel(typ string) imOutboundResourceModel {
+	var m imOutboundResourceModel
+	m.Name, m.Type = types.StringValue("n"), types.StringValue(typ)
+	m.TeamID, m.IsActive = types.Int64Null(), types.BoolValue(true)
+	m.FilterTeamIDs, m.FilterSeverity, m.EventKinds = types.ListNull(types.Int64Type), types.ListNull(types.StringType), types.ListNull(types.StringType)
+	m.Email, m.BaseURL, m.ProjectKey, m.LinearTeamID = types.StringNull(), types.StringNull(), types.StringNull(), types.StringNull()
+	m.WorkspaceID, m.ChannelID, m.IncidentChannelMinSeverity = types.Int64Null(), types.StringNull(), types.StringNull()
+	f := types.BoolValue(false)
+	m.ActionLinks, m.MinimalPayload, m.ReadOnly, m.ThreadCommentSync, m.IncidentChannelPrivate = f, f, f, f, f
+	m.SecretsWOVersion = types.Int64Value(1)
+	m.WebhookURLWO, m.BearerTokenWO, m.APITokenWO, m.SigningSecretWO = types.StringNull(), types.StringNull(), types.StringNull(), types.StringNull()
+	m.RoutingKeyWO, m.APIKeyWO, m.HeadersWO = types.StringNull(), types.StringNull(), types.MapNull(types.StringType)
+	return m
+}
+
+// Unit: the non-secret config of the newer types. Create sends only the keys of the plan's type;
+// a removed incident channel severity goes out as null (= off), a switch back to false as false.
+func TestImOutboundNewTypesConfig(t *testing.T) {
+	ctx := context.Background()
+	app := outboundTestModel("slack_app")
+	app.WorkspaceID, app.ChannelID = types.Int64Value(5), types.StringValue("C0TFACC")
+	app.ReadOnly, app.IncidentChannelMinSeverity = types.BoolValue(true), types.StringValue("sev2")
+	app.MinimalPayload = types.BoolValue(true) // not a slack_app key; ValidateConfig rejects it, never sent
+	if got := mustJSON(t, plainOutboundConfig(&app.imOutboundModel, &imOutboundModel{})); got != `{"channelId":"C0TFACC","incidentChannelMinSeverity":"sev2","incidentChannelPrivate":false,"readOnly":true,"threadCommentSync":false,"workspaceId":5}` {
+		t.Errorf("slack_app create: %s", got)
+	}
+	plan := app
+	plan.ReadOnly, plan.IncidentChannelMinSeverity, plan.ThreadCommentSync = types.BoolValue(false), types.StringNull(), types.BoolValue(true)
+	if got := mustJSON(t, outboundPatch(ctx, &plan, &app, &plan)); got != `{"config":{"incidentChannelMinSeverity":null,"readOnly":false,"threadCommentSync":true}}` {
+		t.Errorf("slack_app patch: %s", got)
+	}
+
+	lin := outboundTestModel("linear")
+	lin.LinearTeamID, lin.APIKeyWO = types.StringValue("9cfb482a-81e3-4154-b5b9-2c805e70a02d"), types.StringValue("lin_api_x")
+	if got := mustJSON(t, plainOutboundConfig(&lin.imOutboundModel, &imOutboundModel{})); got != `{"linearTeamId":"9cfb482a-81e3-4154-b5b9-2c805e70a02d"}` {
+		t.Errorf("linear create: %s", got)
+	}
+	if got := mustJSON(t, outboundSecrets(ctx, &lin)); got != `{"apiKey":"lin_api_x"}` {
+		t.Errorf("linear secrets: %s", got)
+	}
+
+	hook := outboundTestModel("webhook")
+	hook.SigningSecretWO, hook.ActionLinks = types.StringValue("0123456789abcdef"), types.BoolValue(true)
+	if got := mustJSON(t, plainOutboundConfig(&hook.imOutboundModel, &imOutboundModel{})); got != `{"actionLinks":true}` {
+		t.Errorf("webhook create: %s", got)
+	}
+	if got := mustJSON(t, outboundSecrets(ctx, &hook)); got != `{"headers":{},"signingSecret":"0123456789abcdef"}` {
+		t.Errorf("webhook secrets: %s", got)
+	}
+}
+
+// Unit: absent switches read as false, so an import of an integration that never set them is clean.
+func TestImOutboundFromAPISwitches(t *testing.T) {
+	yes, ws, sev := true, int64(4), "sev1"
+	var m imOutboundModel
+	m.fromAPI(&client.ImOutbound{ID: 1, Type: "slack_app", Config: client.ImOutboundConfig{ReadOnly: &yes, WorkspaceID: &ws, IncidentChannelMinSeverity: &sev}})
+	if !m.ReadOnly.ValueBool() || m.ThreadCommentSync.IsNull() || m.ThreadCommentSync.ValueBool() || m.WorkspaceID.ValueInt64() != 4 ||
+		m.IncidentChannelMinSeverity.ValueString() != "sev1" || !m.ChannelID.IsNull() {
+		t.Errorf("fromAPI: %+v", m)
+	}
+}
+
+// Unit: every type of the app contract is accepted, and every field belongs to a known type.
+func TestImOutboundFieldTypes(t *testing.T) {
+	for name, typs := range outboundFieldTypes {
+		for _, typ := range typs {
+			if !slices.Contains(client.ImOutboundTypes, typ) {
+				t.Errorf("%s: unknown type %q", name, typ)
+			}
+		}
+	}
+	m := outboundTestModel("webhook")
+	for name := range m.configFields() {
+		if _, ok := outboundFieldTypes[name]; !ok {
+			t.Errorf("%s has no entry in outboundFieldTypes", name)
+		}
 	}
 }
 
@@ -207,9 +290,11 @@ func TestAccImChannel(t *testing.T) {
 
 // Acceptance: one integration per secret shape. The targets are never called on save.
 func imOutboundConfig(team int64, name string, step int) string {
-	kinds, sev, active, ver, hook := `["incident_created", "resolved"]`, `["sev1"]`, "true", 1, "a"
+	kinds, sev, active, ver, hook, on := `["incident_created", "resolved"]`, `["sev1"]`, "true", 1, "a", "true"
+	linTeam := "9cfb482a-81e3-4154-b5b9-2c805e70a02d"
 	if step == 2 {
-		kinds, sev, active, ver, hook = `["resolved"]`, `["sev1", "sev2"]`, "false", 2, "b"
+		kinds, sev, active, ver, hook, on = `["resolved"]`, `["sev1", "sev2"]`, "false", 2, "b", "false"
+		linTeam = "1d2c3b4a-0000-4000-8000-00000000abcd"
 	}
 	return imProviderBlock() + fmt.Sprintf(`
 resource "uptimeify_im_outbound_integration" "hook" {
@@ -223,7 +308,29 @@ resource "uptimeify_im_outbound_integration" "hook" {
   webhook_url_wo     = "https://hooks.example.com/tfacc-%[7]s"
   bearer_token_wo    = "tfacc-bearer-%[7]s"
   headers_wo         = { "X-Tfacc" = "%[7]s" }
+  signing_secret_wo  = "tfacc-signing-secret-%[7]s"
+  action_links       = %[8]s
   secrets_wo_version = %[6]d
+}
+
+resource "uptimeify_im_outbound_integration" "mm" {
+  name            = "%[2]s-mm"
+  type            = "mattermost"
+  webhook_url_wo  = "https://hooks.example.com/tfacc-mm"
+  minimal_payload = %[8]s
+}
+
+resource "uptimeify_im_outbound_integration" "gc" {
+  name           = "%[2]s-gc"
+  type           = "googlechat"
+  webhook_url_wo = "https://hooks.example.com/tfacc-gc"
+}
+
+resource "uptimeify_im_outbound_integration" "lin" {
+  name           = "%[2]s-lin"
+  type           = "linear"
+  linear_team_id = "%[9]s"
+  api_key_wo     = "tfacc-linear-key"
 }
 
 resource "uptimeify_im_outbound_integration" "jira" {
@@ -242,7 +349,7 @@ resource "uptimeify_im_outbound_integration" "pd" {
 }
 
 data "uptimeify_im_outbound_integration" "by_name" { name = uptimeify_im_outbound_integration.hook.name }
-`, team, name, kinds, sev, active, ver, hook)
+`, team, name, kinds, sev, active, ver, hook, on, linTeam)
 }
 
 func TestAccImOutboundIntegration(t *testing.T) {
@@ -250,8 +357,9 @@ func TestAccImOutboundIntegration(t *testing.T) {
 	name := fmt.Sprintf("tfacc-ob-%d", time.Now().Unix()%1_000_000)
 	ids := map[string]string{}
 	const h, j, p = "uptimeify_im_outbound_integration.hook", "uptimeify_im_outbound_integration.jira", "uptimeify_im_outbound_integration.pd"
+	const mm, gc, lin = "uptimeify_im_outbound_integration.mm", "uptimeify_im_outbound_integration.gc", "uptimeify_im_outbound_integration.lin"
 	capture := func(st *terraform.State) error {
-		for _, r := range []string{h, j, p} {
+		for _, r := range []string{h, j, p, mm, gc, lin} {
 			ids[r] = st.RootModule().Resources[r].Primary.ID
 		}
 		return nil
@@ -286,6 +394,17 @@ func TestAccImOutboundIntegration(t *testing.T) {
 					tfresource.TestCheckResourceAttr(p, "has_routing_key", "true"),
 					tfresource.TestCheckNoResourceAttr(p, "event_kinds"),
 					tfresource.TestCheckResourceAttrPair("data.uptimeify_im_outbound_integration.by_name", "id", h, "id"),
+					tfresource.TestCheckResourceAttr(h, "has_signing_secret", "true"),
+					tfresource.TestCheckResourceAttr(h, "action_links", "true"),
+					tfresource.TestCheckResourceAttr(h, "minimal_payload", "false"),
+					tfresource.TestCheckResourceAttr(j, "has_inbound_token", "false"),
+					tfresource.TestCheckResourceAttr(mm, "has_webhook_url", "true"),
+					tfresource.TestCheckResourceAttr(mm, "minimal_payload", "true"),
+					tfresource.TestCheckResourceAttr(gc, "has_webhook_url", "true"),
+					tfresource.TestCheckResourceAttr(gc, "minimal_payload", "false"),
+					tfresource.TestCheckResourceAttr(lin, "has_api_key", "true"),
+					tfresource.TestCheckResourceAttr(lin, "linear_team_id", "9cfb482a-81e3-4154-b5b9-2c805e70a02d"),
+					tfresource.TestCheckNoResourceAttr(lin, "api_key_wo"),
 					capture,
 				),
 			},
@@ -297,9 +416,16 @@ func TestAccImOutboundIntegration(t *testing.T) {
 					tfresource.TestCheckResourceAttr(h, "filter_severities.#", "2"),
 					tfresource.TestCheckResourceAttr(h, "has_headers", "true"),
 					tfresource.TestCheckResourceAttr("data.uptimeify_im_outbound_integration.by_name", "is_active", "false"),
+					tfresource.TestCheckResourceAttr("data.uptimeify_im_outbound_integration.by_name", "action_links", "false"),
+					tfresource.TestCheckResourceAttr(h, "action_links", "false"),
+					tfresource.TestCheckResourceAttr(h, "has_signing_secret", "true"),
+					tfresource.TestCheckResourceAttr(mm, "minimal_payload", "false"),
+					tfresource.TestCheckResourceAttr(lin, "linear_team_id", "1d2c3b4a-0000-4000-8000-00000000abcd"),
 					func(st *terraform.State) error {
-						if st.RootModule().Resources[h].Primary.ID != ids[h] {
-							return fmt.Errorf("webhook integration was replaced")
+						for _, r := range []string{h, mm, lin} {
+							if st.RootModule().Resources[r].Primary.ID != ids[r] {
+								return fmt.Errorf("%s was replaced", r)
+							}
 						}
 						return nil
 					},
@@ -307,6 +433,20 @@ func TestAccImOutboundIntegration(t *testing.T) {
 			},
 			{ResourceName: h, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"secrets_wo_version"}},
 			{ResourceName: j, ImportState: true, ImportStateVerify: true},
+			{ResourceName: mm, ImportState: true, ImportStateVerify: true},
+			{ResourceName: lin, ImportState: true, ImportStateVerify: true},
+			{ // field drift: minimal_payload switched on outside Terraform -> plan not empty
+				PreConfig: func() {
+					accPreCheck(t)
+					if _, err := accClient().UpdateImOutbound(context.Background(), ids[mm], map[string]any{"config": map[string]any{"minimalPayload": true}}); err != nil {
+						t.Fatal(err)
+					}
+				},
+				Config:             withoutDataSources(imOutboundConfig(team, name, 2)),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{Config: imOutboundConfig(team, name, 2), Check: tfresource.TestCheckResourceAttr(mm, "minimal_payload", "false")},
 			{ // drift: deleted outside Terraform -> plan not empty
 				PreConfig: func() {
 					accPreCheck(t)
@@ -319,6 +459,100 @@ func TestAccImOutboundIntegration(t *testing.T) {
 				ExpectNonEmptyPlan: true,
 			},
 			{Config: imOutboundConfig(team, name, 2), Check: capture},
+		},
+	})
+}
+
+// Acceptance: slack_app against a connected workspace. UPTIMEIFY_ACC_SLACK_WORKSPACE_ID = id of an
+// im_chat_workspace of the token's organization (website-monitoring seeds one; connecting a real
+// one needs the Slack OAuth flow). Nothing is sent to Slack on save.
+func TestAccImOutboundSlackApp(t *testing.T) {
+	ws := os.Getenv("UPTIMEIFY_ACC_SLACK_WORKSPACE_ID")
+	if ws == "" {
+		t.Skip("UPTIMEIFY_ACC_SLACK_WORKSPACE_ID not set: slack_app needs a connected Slack workspace")
+	}
+	accImTeam(t) // activates IM
+	name := fmt.Sprintf("tfacc-oba-%d", time.Now().Unix()%1_000_000)
+	const r = "uptimeify_im_outbound_integration.app"
+	var id string
+	cfg := func(extra string) string {
+		return imProviderBlock() + fmt.Sprintf(`
+resource "uptimeify_im_outbound_integration" "app" {
+  name         = %q
+  type         = "slack_app"
+  workspace_id = %s
+%s
+}
+`, name, ws, extra)
+	}
+	step1 := cfg(`  channel_id                    = "C0TFACC01"
+  read_only                     = true
+  thread_comment_sync           = true
+  incident_channel_min_severity = "sev2"
+  incident_channel_private      = true`)
+	step2 := cfg(`  channel_id = "G0TFACC02"`)
+	tfresource.Test(t, tfresource.TestCase{
+		PreCheck:                 func() { accPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProviders,
+		CheckDestroy: func(*terraform.State) error {
+			if _, err := accClient().GetImOutbound(context.Background(), id); !client.IsNotFound(err) {
+				return fmt.Errorf("slack_app integration %s still exists (err=%v)", id, err)
+			}
+			return nil
+		},
+		Steps: []tfresource.TestStep{
+			{ // first, so the post-test destroy runs a valid config: a channel name is rejected before any API call
+				Config:      cfg(`  channel_id = "#general"`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`Slack channel id`),
+			},
+			{ // webhook_url_wo does not belong to slack_app
+				Config:      cfg("  channel_id = \"G0TFACC02\"\n  webhook_url_wo = \"https://hooks.example.com/x\""),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`not allowed`),
+			},
+			{
+				Config: step1,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttr(r, "workspace_id", ws),
+					tfresource.TestCheckResourceAttr(r, "channel_id", "C0TFACC01"),
+					tfresource.TestCheckResourceAttr(r, "read_only", "true"),
+					tfresource.TestCheckResourceAttr(r, "thread_comment_sync", "true"),
+					tfresource.TestCheckResourceAttr(r, "incident_channel_min_severity", "sev2"),
+					tfresource.TestCheckResourceAttr(r, "incident_channel_private", "true"),
+					tfresource.TestCheckResourceAttr(r, "has_webhook_url", "false"),
+					func(st *terraform.State) error { id = st.RootModule().Resources[r].Primary.ID; return nil },
+				),
+			},
+			{ // in place: other channel, switches off, incident channel off (null)
+				Config: step2,
+				Check: tfresource.ComposeAggregateTestCheckFunc(
+					tfresource.TestCheckResourceAttr(r, "channel_id", "G0TFACC02"),
+					tfresource.TestCheckResourceAttr(r, "read_only", "false"),
+					tfresource.TestCheckResourceAttr(r, "thread_comment_sync", "false"),
+					tfresource.TestCheckNoResourceAttr(r, "incident_channel_min_severity"),
+					tfresource.TestCheckResourceAttr(r, "incident_channel_private", "false"),
+					func(st *terraform.State) error {
+						if st.RootModule().Resources[r].Primary.ID != id {
+							return fmt.Errorf("slack_app integration was replaced")
+						}
+						return nil
+					},
+				),
+			},
+			{ResourceName: r, ImportState: true, ImportStateVerify: true},
+			{ // drift: read_only switched on outside Terraform
+				PreConfig: func() {
+					accPreCheck(t)
+					if _, err := accClient().UpdateImOutbound(context.Background(), id, map[string]any{"config": map[string]any{"readOnly": true}}); err != nil {
+						t.Fatal(err)
+					}
+				},
+				Config:             step2,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{Config: step2, Check: tfresource.TestCheckResourceAttr(r, "read_only", "false")},
 		},
 	})
 }
